@@ -1,14 +1,14 @@
 # Sai Perps P&L Tracker
 
-A web application for tracking profit and loss on Sai Perps trades on Nibiru EVM.
+A web application for tracking profit and loss on Sai Perps trades on Nibiru.
 
 ## Overview
 
-This application allows users to enter a Nibiru EVM address and view their Sai Perps trading history with detailed profit/loss information per trade.
+This application allows users to enter a Nibiru address and view their Sai Perps trading history with detailed profit/loss information per trade.
 
 ## Features
 
-- Enter any Nibiru EVM address to analyze trading history
+- Enter any Nibiru address to analyze trading history
 - View total P&L, win rate, and trade count
 - Detailed trade history table with:
   - Trade type (open/close)
@@ -28,11 +28,11 @@ This application allows users to enter a Nibiru EVM address and view their Sai P
 
 ### Backend (Express)
 - **server/routes.ts**: API endpoint `/api/trades?address=<address>`
-- Fetches data from Nibiru EVM via JSON-RPC
+- Fetches data from Nibiru via JSON-RPC
 - Parses WASM event logs to extract trade information
 
 ### Data Flow
-1. User enters Nibiru EVM address
+1. User enters Nibiru address
 2. Frontend calls `/api/trades?address=<address>`
 3. Backend queries Nibiru RPC for transaction logs
 4. Parses event data to extract trade info (open/close, prices, P&L)
@@ -40,7 +40,7 @@ This application allows users to enter a Nibiru EVM address and view their Sai P
 
 ## Technical Details
 
-### Nibiru EVM Integration
+### Nibiru Integration
 - RPC Endpoint: `https://evm-rpc.nibiru.fi`
 - Sai Perps Contract: `0x9F48A925Dda8528b3A5c2A6717Df0F03c8b167c0`
 - WASM Precompile: `0x0000000000000000000000000000000000000802`

@@ -213,7 +213,7 @@ export default function Home() {
             </div>
             <div>
               <h1 className="text-lg font-semibold">Sai Perps Tracker</h1>
-              <p className="text-xs text-muted-foreground">Nibiru EVM</p>
+              <p className="text-xs text-muted-foreground">Nibiru</p>
             </div>
           </div>
           <Badge variant="outline" className="text-xs">
@@ -229,7 +229,7 @@ export default function Home() {
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-3">Track Your P&L</h2>
             <p className="text-muted-foreground">
-              Enter your Nibiru EVM address to view your Sai Perps trading history and profit/loss per trade
+              Enter your Nibiru address to view your Sai Perps trading history and profit/loss per trade
             </p>
           </div>
 
@@ -337,7 +337,7 @@ export default function Home() {
             </div>
             <h3 className="text-xl font-semibold mb-2">Enter an Address to Begin</h3>
             <p className="text-muted-foreground max-w-md mx-auto">
-              Paste your Nibiru EVM address above to analyze your Sai Perps trading performance
+              Paste your Nibiru address above to analyze your Sai Perps trading performance
             </p>
           </div>
         )}
@@ -346,7 +346,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-border/50 mt-auto">
         <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-          <p>Data sourced from Nibiru EVM via nibiscan.io</p>
+          <p>Data sourced from Nibiru via nibiscan.io</p>
         </div>
       </footer>
     </div>
