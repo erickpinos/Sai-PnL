@@ -2,7 +2,18 @@ import type { Express } from "express";
 import { createServer, type Server } from "http";
 import type { Trade, TradesResponse } from "@shared/schema";
 
-const NIBIRU_RPC = "https://evm-rpc.nibiru.fi";
+// Network configurations
+const NETWORKS = {
+  mainnet: {
+    rpc: "https://evm-rpc.nibiru.fi",
+    explorer: "https://nibiscan.io",
+  },
+  testnet: {
+    rpc: "https://evm-rpc.testnet-2.nibiru.fi",
+    explorer: "https://testnet.nibiscan.io",
+  },
+};
+
 const SAI_PERPS_CONTRACT = "0x9F48A925Dda8528b3A5c2A6717Df0F03c8b167c0".toLowerCase();
 const WASM_PRECOMPILE = "0x0000000000000000000000000000000000000802".toLowerCase();
 
@@ -149,8 +160,8 @@ function parseEventData(data: string): any {
 }
 
 // Make JSON-RPC call to Nibiru
-async function rpcCall(method: string, params: any[]): Promise<any> {
-  const response = await fetch(NIBIRU_RPC, {
+async function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
+  const response = await fetch(rpcUrl, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -168,9 +179,9 @@ async function rpcCall(method: string, params: any[]): Promise<any> {
 }
 
 // Get block timestamp
-async function getBlockTimestamp(blockNumber: string): Promise<string> {
+async function getBlockTimestamp(rpcUrl: string, blockNumber: string): Promise<string> {
   try {
-    const block = await rpcCall("eth_getBlockByNumber", [blockNumber, false]);
+    const block = await rpcCall(rpcUrl, "eth_getBlockByNumber", [blockNumber, false]);
     if (block && block.timestamp) {
       const timestamp = parseInt(block.timestamp, 16) * 1000;
       return new Date(timestamp).toISOString();
@@ -182,14 +193,14 @@ async function getBlockTimestamp(blockNumber: string): Promise<string> {
 }
 
 // Get logs in chunks (max 10000 blocks per request)
-async function getLogsInChunks(fromBlock: number, toBlock: number, address: string, topics: string[]): Promise<any[]> {
+async function getLogsInChunks(rpcUrl: string, fromBlock: number, toBlock: number, address: string, topics: string[]): Promise<any[]> {
   const allLogs: any[] = [];
   const chunkSize = 9000; // Stay under 10000 limit
   
   for (let start = fromBlock; start <= toBlock; start += chunkSize) {
     const end = Math.min(start + chunkSize - 1, toBlock);
     try {
-      const logs = await rpcCall("eth_getLogs", [{
+      const logs = await rpcCall(rpcUrl, "eth_getLogs", [{
         fromBlock: "0x" + start.toString(16),
         toBlock: "0x" + end.toString(16),
         address,
@@ -207,13 +218,13 @@ async function getLogsInChunks(fromBlock: number, toBlock: number, address: stri
 }
 
 // Get transaction count and recent transactions
-async function getAddressTransactions(address: string): Promise<Trade[]> {
+async function getAddressTransactions(rpcUrl: string, address: string): Promise<Trade[]> {
   const trades: Trade[] = [];
   const lowerAddress = address.toLowerCase();
   
   try {
     // Get the latest block number
-    const latestBlock = await rpcCall("eth_blockNumber", []);
+    const latestBlock = await rpcCall(rpcUrl, "eth_blockNumber", []);
     const latestBlockNum = parseInt(latestBlock, 16);
     
     // Search last 50000 blocks (about 1 day with ~1.8s blocks)
@@ -222,7 +233,7 @@ async function getAddressTransactions(address: string): Promise<Trade[]> {
     
     
     // Get logs from WASM precompile with the Sai Perps event topic in chunks
-    const logs = await getLogsInChunks(fromBlock, latestBlockNum, WASM_PRECOMPILE, [WASM_EVENT_TOPIC]);
+    const logs = await getLogsInChunks(rpcUrl, fromBlock, latestBlockNum, WASM_PRECOMPILE, [WASM_EVENT_TOPIC]);
 
 
     // First pass: identify transactions that contain our address
@@ -249,7 +260,7 @@ async function getAddressTransactions(address: string): Promise<Trade[]> {
     const txLogsMap = new Map<string, any[]>();
     for (const txHash of matchingTxHashes) {
       try {
-        const receipt = await rpcCall("eth_getTransactionReceipt", [txHash]);
+        const receipt = await rpcCall(rpcUrl, "eth_getTransactionReceipt", [txHash]);
         if (receipt && receipt.logs) {
           const parsedLogs: any[] = [];
           for (const log of receipt.logs) {
@@ -268,7 +279,7 @@ async function getAddressTransactions(address: string): Promise<Trade[]> {
     // Process each transaction
     for (const [txHash, txLogs] of txLogsMap) {
       const blockNumber = txBlockMap.get(txHash)!;
-      const timestamp = await getBlockTimestamp(blockNumber);
+      const timestamp = await getBlockTimestamp(rpcUrl, blockNumber);
       
       let trade: Trade = {
         txHash,
@@ -447,6 +458,7 @@ export async function registerRoutes(
   // Get trades for an address
   app.get("/api/trades", async (req, res) => {
     const address = req.query.address as string;
+    const network = (req.query.network as string) || "mainnet";
     
     if (!address) {
       return res.status(400).json({ error: "Address is required" });
@@ -457,8 +469,15 @@ export async function registerRoutes(
       return res.status(400).json({ error: "Invalid EVM address format" });
     }
 
+    // Validate network
+    if (network !== "mainnet" && network !== "testnet") {
+      return res.status(400).json({ error: "Invalid network. Use 'mainnet' or 'testnet'" });
+    }
+
+    const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
+
     try {
-      const trades = await getAddressTransactions(address);
+      const trades = await getAddressTransactions(networkConfig.rpc, address);
       
       // Calculate stats
       const closeTrades = trades.filter(t => t.type === "close" && t.profitPct !== undefined);
@@ -472,6 +491,7 @@ export async function registerRoutes(
         totalPnl,
         winRate,
         totalTrades: trades.length,
+        explorer: networkConfig.explorer,
       };
 
       res.json(response);

@@ -31,4 +31,5 @@ export interface TradesResponse {
   totalPnl: number;
   winRate: number;
   totalTrades: number;
+  explorer?: string;
 }

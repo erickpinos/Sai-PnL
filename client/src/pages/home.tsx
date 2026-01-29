@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, ExternalLink, Loader2, Wallet } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, ExternalLink, Loader2, Wallet, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import type { TradesResponse, Trade } from "@shared/schema";
 
 const addressSchema = z.object({
@@ -59,7 +60,7 @@ function StatsCard({
   );
 }
 
-function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean }) {
+function TradesTable({ trades, loading, explorerUrl }: { trades: Trade[]; loading: boolean; explorerUrl: string }) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -163,7 +164,7 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
               </TableCell>
               <TableCell>
                 <a
-                  href={`https://nibiscan.io/tx/${trade.txHash}`}
+                  href={`${explorerUrl}/tx/${trade.txHash}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-muted-foreground hover:text-primary transition-colors"
@@ -180,8 +181,16 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
   );
 }
 
+type Network = "mainnet" | "testnet";
+
+const NETWORK_CONFIG = {
+  mainnet: { label: "Mainnet", explorer: "https://nibiscan.io" },
+  testnet: { label: "Testnet", explorer: "https://testnet.nibiscan.io" },
+};
+
 export default function Home() {
   const [searchAddress, setSearchAddress] = useState<string | null>(null);
+  const [network, setNetwork] = useState<Network>("mainnet");
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -191,9 +200,16 @@ export default function Home() {
   });
 
   const { data, isLoading, error } = useQuery<TradesResponse>({
-    queryKey: ["/api/trades", searchAddress],
+    queryKey: ["/api/trades", searchAddress, network],
+    queryFn: async () => {
+      const res = await fetch(`/api/trades?address=${searchAddress}&network=${network}`);
+      if (!res.ok) throw new Error("Failed to fetch trades");
+      return res.json();
+    },
     enabled: !!searchAddress,
   });
+
+  const explorerUrl = data?.explorer || NETWORK_CONFIG[network].explorer;
 
   const onSubmit = (values: AddressForm) => {
     setSearchAddress(values.address);
@@ -216,10 +232,31 @@ export default function Home() {
               <p className="text-xs text-muted-foreground">Nibiru</p>
             </div>
           </div>
-          <Badge variant="outline" className="text-xs">
-            <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse" />
-            Mainnet
-          </Badge>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" size="sm" className="text-xs gap-2" data-testid="dropdown-network">
+                <span className={`w-2 h-2 rounded-full ${network === "mainnet" ? "bg-emerald-500" : "bg-amber-500"} animate-pulse`} />
+                {NETWORK_CONFIG[network].label}
+                <ChevronDown className="h-3 w-3" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem 
+                onClick={() => setNetwork("mainnet")}
+                data-testid="menu-item-mainnet"
+              >
+                <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
+                Mainnet
+              </DropdownMenuItem>
+              <DropdownMenuItem 
+                onClick={() => setNetwork("testnet")}
+                data-testid="menu-item-testnet"
+              >
+                <span className="w-2 h-2 rounded-full bg-amber-500 mr-2" />
+                Testnet
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </header>
 
@@ -323,7 +360,7 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TradesTable trades={data?.trades ?? []} loading={isLoading} />
+                <TradesTable trades={data?.trades ?? []} loading={isLoading} explorerUrl={explorerUrl} />
               </CardContent>
             </Card>
           </>
