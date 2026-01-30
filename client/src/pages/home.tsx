@@ -111,9 +111,9 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
             <TableHead className="text-right">Leverage</TableHead>
             <TableHead className="text-right">Entry Price</TableHead>
             <TableHead className="text-right">Exit Price</TableHead>
-            <TableHead className="text-right">{pnlDisplayMode === "percent" ? "P&L %" : "P&L $"}</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
-            <TableHead className="text-right">Net</TableHead>
+            <TableHead className="text-right">{pnlDisplayMode === "percent" ? "P&L %" : "P&L $"}</TableHead>
+            <TableHead className="text-right">Revenue</TableHead>
             <TableHead className="text-right">Opening Fee</TableHead>
             <TableHead className="text-right">Closing Fee</TableHead>
             <TableHead className="text-right">Borrowing Fee</TableHead>
@@ -156,6 +156,9 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
               <TableCell className="text-right font-mono">
                 {trade.closePrice ? `$${trade.closePrice.toLocaleString()}` : "-"}
               </TableCell>
+              <TableCell className="text-right font-mono text-sm">
+                {trade.collateral ? `$${trade.collateral.toFixed(2)}` : "-"}
+              </TableCell>
               <TableCell className="text-right">
                 {pnlDisplayMode === "percent" ? (
                   trade.profitPct !== undefined ? (
@@ -178,9 +181,6 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
                     <span className="text-muted-foreground">-</span>
                   )
                 )}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm">
-                {trade.collateral ? `$${trade.collateral.toFixed(2)}` : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
                 {trade.amountReceived !== undefined ? (
