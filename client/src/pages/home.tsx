@@ -47,9 +47,9 @@ function StatsCard({
           <CardDescription className="text-sm font-medium">{title}</CardDescription>
           {onToggle && (
             <Button 
-              variant="ghost" 
+              variant="outline" 
               size="sm" 
-              className="h-6 px-2 text-xs text-muted-foreground"
+              className="h-6 px-2 text-xs"
               onClick={onToggle}
               data-testid="button-toggle-pnl"
             >
@@ -80,7 +80,7 @@ function StatsCard({
   );
 }
 
-function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean }) {
+function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loading: boolean; pnlDisplayMode: PnlDisplayMode }) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -111,13 +111,14 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
             <TableHead className="text-right">Leverage</TableHead>
             <TableHead className="text-right">Entry Price</TableHead>
             <TableHead className="text-right">Exit Price</TableHead>
-            <TableHead className="text-right">P&L %</TableHead>
+            <TableHead className="text-right">{pnlDisplayMode === "percent" ? "P&L %" : "P&L $"}</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
-            <TableHead className="text-right">Received</TableHead>
+            <TableHead className="text-right">Net</TableHead>
             <TableHead className="text-right">Opening Fee</TableHead>
             <TableHead className="text-right">Closing Fee</TableHead>
             <TableHead className="text-right">Borrowing Fee</TableHead>
             <TableHead className="text-right">Trigger Fee</TableHead>
+            <TableHead className="text-right">Net - Fees</TableHead>
             <TableHead>Time Opened</TableHead>
             <TableHead>Time Closed</TableHead>
           </TableRow>
@@ -156,14 +157,26 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
                 {trade.closePrice ? `$${trade.closePrice.toLocaleString()}` : "-"}
               </TableCell>
               <TableCell className="text-right">
-                {trade.profitPct !== undefined ? (
-                  <span className={`font-semibold ${
-                    trade.profitPct >= 0 ? "text-emerald-500" : "text-red-500"
-                  }`}>
-                    {trade.profitPct >= 0 ? "+" : ""}{(trade.profitPct * 100).toFixed(2)}%
-                  </span>
+                {pnlDisplayMode === "percent" ? (
+                  trade.profitPct !== undefined ? (
+                    <span className={`font-semibold ${
+                      trade.profitPct >= 0 ? "text-emerald-500" : "text-red-500"
+                    }`}>
+                      {trade.profitPct >= 0 ? "+" : ""}{(trade.profitPct * 100).toFixed(2)}%
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )
                 ) : (
-                  <span className="text-muted-foreground">-</span>
+                  trade.pnlAmount !== undefined ? (
+                    <span className={`font-semibold ${
+                      trade.pnlAmount >= 0 ? "text-emerald-500" : "text-red-500"
+                    }`}>
+                      {trade.pnlAmount >= 0 ? "+" : ""}${trade.pnlAmount.toFixed(2)}
+                    </span>
+                  ) : (
+                    <span className="text-muted-foreground">-</span>
+                  )
                 )}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
@@ -187,6 +200,13 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {trade.triggerFee !== undefined && trade.triggerFee > 0 ? `$${trade.triggerFee.toFixed(4)}` : "-"}
+              </TableCell>
+              <TableCell className="text-right font-mono text-sm">
+                {trade.amountReceived !== undefined && trade.totalFees !== undefined ? (
+                  <span className={(trade.amountReceived - trade.totalFees) >= (trade.collateral || 0) ? "text-emerald-500" : "text-red-500"}>
+                    ${(trade.amountReceived - trade.totalFees).toFixed(2)}
+                  </span>
+                ) : "-"}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleString(undefined, {
@@ -411,7 +431,7 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TradesTable trades={trades} loading={isLoading} />
+                <TradesTable trades={trades} loading={isLoading} pnlDisplayMode={pnlDisplayMode} />
               </CardContent>
             </Card>
           </>
