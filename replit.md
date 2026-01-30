@@ -15,6 +15,8 @@ This application allows users to enter a Nibiru EVM address (0x format) and view
   - Trading pair (e.g., BTC)
   - Direction (long/short) with leverage
   - Entry/exit prices
+  - Time opened and time closed
+  - Opening and closing fees (extracted from RPC transaction receipts)
   - P&L percentage and amount
   - Collateral
   - Links to nibiscan.io for each transaction
@@ -54,11 +56,20 @@ This application allows users to enter a Nibiru EVM address (0x format) and view
 
 ### GraphQL Queries
 - `trades` query: Returns trade list with open/close status, prices, leverage
-- `tradeHistory` query: Returns `realizedPnlPct` and `realizedPnlCollateral` for closed trades
+- `tradeHistory` query: Returns `realizedPnlPct`, `realizedPnlCollateral`, and `evmTxHash` for closed trades
 
 ### P&L Data Sources
 - For closed trades: `realizedPnlPct` from `tradeHistory` query
 - For open trades: `state.pnlPct` from `trades` query (unrealized P&L)
+
+### Fee Extraction (RPC-based)
+- Fees are extracted from EVM transaction receipts via RPC
+- Mainnet RPC: `https://evm-rpc.nibiru.fi`
+- Testnet RPC: `https://evm-rpc.testnet-2.nibiru.fi`
+- Parse wasm events from transaction logs:
+  - `wasm-sai/perp/process_opening_fees` → `total_fee_charged`
+  - `wasm-sai/perp/process_closing_fees` → `final_closing_fee`
+- Fees are fetched in parallel (batches of 10) for performance
 
 ## Running the App
 
@@ -70,6 +81,8 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-01-30: Implemented RPC-based fee extraction from transaction receipts (opening and closing fees)
+- 2026-01-30: Added Time Opened and Time Closed columns to trade table
 - 2026-01-30: Refactored to use Sai Keeper GraphQL API for instant data retrieval (vs slow RPC block scanning)
 - 2026-01-30: Added EVM to bech32 address conversion
 - 2026-01-30: Fixed P&L display by merging trade data with trade history for realized P&L

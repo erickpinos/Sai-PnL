@@ -3,15 +3,17 @@ import { createServer, type Server } from "http";
 import type { Trade, TradesResponse } from "@shared/schema";
 import { bech32 } from "bech32";
 
-// Network configurations for Sai Keeper GraphQL API
+// Network configurations for Sai Keeper GraphQL API and EVM RPC
 const NETWORKS = {
   mainnet: {
     graphql: "https://sai-keeper.nibiru.fi/query",
     explorer: "https://nibiscan.io",
+    rpc: "https://evm-rpc.nibiru.fi",
   },
   testnet: {
     graphql: "https://sai-keeper.testnet-2.nibiru.fi/query",
     explorer: "https://testnet.nibiscan.io",
+    rpc: "https://evm-rpc.testnet-2.nibiru.fi",
   },
 };
 
@@ -97,6 +99,7 @@ const TRADE_HISTORY_QUERY = `
       ) {
         id
         tradeChangeType
+        evmTxHash
         block {
           block
           block_ts
@@ -195,6 +198,7 @@ interface PerpTrade {
 interface TradeHistoryItem {
   id: number;
   tradeChangeType: string;
+  evmTxHash: string | null;
   block: {
     block: number;
     block_ts: string;
@@ -213,6 +217,98 @@ interface TradeHistoryItem {
   };
   realizedPnlCollateral: number | null;
   realizedPnlPct: number | null;
+}
+
+// Interface for RPC transaction receipt
+interface TransactionReceipt {
+  logs: Array<{
+    data: string;
+    topics: string[];
+  }>;
+}
+
+// Extract fee data from transaction receipt logs
+function extractFeesFromReceipt(receipt: TransactionReceipt): { openingFee: number; closingFee: number } {
+  let openingFee = 0;
+  let closingFee = 0;
+  
+  for (const log of receipt.logs) {
+    try {
+      const dataHex = log.data.slice(2);
+      if (dataHex.length <= 128) continue;
+      
+      const contentHex = dataHex.slice(128);
+      const decoded = Buffer.from(contentHex, 'hex').toString('utf8').replace(/\x00/g, '');
+      const json = JSON.parse(decoded);
+      
+      if (json.eventType === 'wasm-sai/perp/process_opening_fees') {
+        openingFee = Number(json.total_fee_charged || 0) / 1e6;
+      } else if (json.eventType === 'wasm-sai/perp/process_closing_fees') {
+        closingFee = Number(json.final_closing_fee || 0) / 1e6;
+      }
+    } catch (e) {
+      // Skip invalid logs
+    }
+  }
+  
+  return { openingFee, closingFee };
+}
+
+// Fetch fees from RPC for a list of transaction hashes
+async function fetchFeesFromRpc(
+  rpcUrl: string, 
+  txHashes: { tradeId: number; evmTxHash: string; isOpening: boolean }[]
+): Promise<Map<number, { openingFee: number; closingFee: number }>> {
+  const feeMap = new Map<number, { openingFee: number; closingFee: number }>();
+  
+  // Filter out null hashes and deduplicate
+  const validTxs = txHashes.filter(tx => tx.evmTxHash);
+  
+  // Fetch receipts in parallel (batch of 10 at a time to avoid overwhelming the RPC)
+  const batchSize = 10;
+  for (let i = 0; i < validTxs.length; i += batchSize) {
+    const batch = validTxs.slice(i, i + batchSize);
+    
+    const receipts = await Promise.all(
+      batch.map(async (tx) => {
+        try {
+          const response = await fetch(rpcUrl, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              jsonrpc: '2.0',
+              method: 'eth_getTransactionReceipt',
+              params: [tx.evmTxHash],
+              id: 1
+            })
+          });
+          const result = await response.json() as { result?: TransactionReceipt };
+          if (result.result) {
+            const fees = extractFeesFromReceipt(result.result);
+            return { tradeId: tx.tradeId, isOpening: tx.isOpening, ...fees };
+          }
+        } catch (e) {
+          console.log(`Failed to fetch receipt for ${tx.evmTxHash}:`, e);
+        }
+        return null;
+      })
+    );
+    
+    // Aggregate fees by trade ID
+    for (const receipt of receipts) {
+      if (!receipt) continue;
+      
+      const existing = feeMap.get(receipt.tradeId) || { openingFee: 0, closingFee: 0 };
+      if (receipt.isOpening) {
+        existing.openingFee = receipt.openingFee;
+      } else {
+        existing.closingFee = receipt.closingFee;
+      }
+      feeMap.set(receipt.tradeId, existing);
+    }
+  }
+  
+  return feeMap;
 }
 
 interface TradesQueryResult {
@@ -268,7 +364,7 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 }
 
 // Convert GraphQL trade data to our Trade type
-function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number; openingFee?: number; closingFee?: number; totalFees?: number }>, feeMap: Map<number, { openingFee: number; closingFee: number; govFee: number; vaultFee: number; triggerFee: number }>): Trade {
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number; openingFee?: number; closingFee?: number; totalFees?: number }>, feeMap: Map<number, { openingFee: number; closingFee: number }>): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
@@ -391,34 +487,33 @@ export async function registerRoutes(
         }),
       ]);
       
-      // Try to fetch fee transactions (may not be available on all endpoints)
-      let feesResult: FeeTransactionsQueryResult | null = null;
-      try {
-        feesResult = await graphqlQuery<FeeTransactionsQueryResult>(networkConfig.graphql, FEE_TRANSACTIONS_QUERY, {
-          trader: nibiAddress,
-          limit: limit * 4,
-        });
-      } catch (feeError) {
-        console.log("Fee API not available, continuing without fee data");
-      }
+      // Collect transaction hashes for RPC fee extraction
+      const txHashesForFees: { tradeId: number; evmTxHash: string; isOpening: boolean }[] = [];
+      const openingTypes = ["position_opened"];
+      const closingTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
       
-      // Build a map of trade ID to fees (opening + closing)
-      const feeMap = new Map<number, { openingFee: number; closingFee: number; govFee: number; vaultFee: number; triggerFee: number }>();
-      if (feesResult?.fee?.feeTransactions) {
-        for (const feeTx of feesResult.fee.feeTransactions) {
-          const existing = feeMap.get(feeTx.tradeId) || { openingFee: 0, closingFee: 0, govFee: 0, vaultFee: 0, triggerFee: 0 };
-          const feeAmount = feeTx.totalFeeCharged / 1e6;
-          if (feeTx.feeType === "OPENING") {
-            existing.openingFee += feeAmount;
-          } else {
-            existing.closingFee += feeAmount;
+      for (const historyItem of historyResult.perp.tradeHistory) {
+        if (historyItem.evmTxHash) {
+          if (openingTypes.includes(historyItem.tradeChangeType)) {
+            txHashesForFees.push({
+              tradeId: historyItem.trade.id,
+              evmTxHash: historyItem.evmTxHash,
+              isOpening: true
+            });
+          } else if (closingTypes.includes(historyItem.tradeChangeType)) {
+            txHashesForFees.push({
+              tradeId: historyItem.trade.id,
+              evmTxHash: historyItem.evmTxHash,
+              isOpening: false
+            });
           }
-          existing.govFee += feeTx.govFee / 1e6;
-          existing.vaultFee += feeTx.vaultFee / 1e6;
-          existing.triggerFee += feeTx.triggerFee / 1e6;
-          feeMap.set(feeTx.tradeId, existing);
         }
       }
+      
+      // Fetch fees from RPC in parallel
+      console.log(`Fetching fees for ${txHashesForFees.length} transactions from RPC...`);
+      const feeMap = await fetchFeesFromRpc(networkConfig.rpc, txHashesForFees);
+      console.log(`Got fees for ${feeMap.size} trades`);
       
       // Build a map of trade ID to realized P&L from trade history
       const pnlMap = new Map<number, { 
