@@ -439,6 +439,10 @@ function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number
         trade.pnlAmount = pnlData.pnlAmount;
       }
     }
+    // Calculate amount received at closing (collateral + P&L)
+    if (trade.collateral !== undefined && trade.pnlAmount !== undefined) {
+      trade.amountReceived = trade.collateral + trade.pnlAmount;
+    }
   }
   
   return trade;
@@ -469,6 +473,10 @@ function convertTradeHistoryItem(item: TradeHistoryItem): Trade | null {
   }
   if (item.realizedPnlCollateral !== null) {
     trade.pnlAmount = item.realizedPnlCollateral / 1e6;
+  }
+  // Calculate amount received at closing (collateral + P&L)
+  if (trade.collateral !== undefined && trade.pnlAmount !== undefined) {
+    trade.amountReceived = trade.collateral + trade.pnlAmount;
   }
   
   return trade;

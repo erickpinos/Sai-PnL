@@ -21,6 +21,7 @@ export const tradeSchema = z.object({
   borrowingFee: z.number().optional(),
   triggerFee: z.number().optional(),
   totalFees: z.number().optional(),
+  amountReceived: z.number().optional(),
 });
 
 export type Trade = z.infer<typeof tradeSchema>;

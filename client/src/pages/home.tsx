@@ -21,24 +21,42 @@ const addressSchema = z.object({
 });
 
 type AddressForm = z.infer<typeof addressSchema>;
+type PnlDisplayMode = "dollars" | "percent";
 
 function StatsCard({ 
   title, 
   value, 
   icon: Icon, 
   trend,
-  loading 
+  loading,
+  onToggle,
+  toggleLabel,
 }: { 
   title: string; 
   value: string; 
   icon: typeof TrendingUp;
   trend?: "up" | "down" | "neutral";
   loading?: boolean;
+  onToggle?: () => void;
+  toggleLabel?: string;
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-        <CardDescription className="text-sm font-medium">{title}</CardDescription>
+        <div className="flex items-center gap-2">
+          <CardDescription className="text-sm font-medium">{title}</CardDescription>
+          {onToggle && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              className="h-6 px-2 text-xs text-muted-foreground"
+              onClick={onToggle}
+              data-testid="button-toggle-pnl"
+            >
+              {toggleLabel}
+            </Button>
+          )}
+        </div>
         <Icon className={`h-4 w-4 ${
           trend === "up" ? "text-emerald-500" : 
           trend === "down" ? "text-red-500" : 
@@ -95,6 +113,7 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
             <TableHead className="text-right">Exit Price</TableHead>
             <TableHead className="text-right">P&L %</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
+            <TableHead className="text-right">Received</TableHead>
             <TableHead className="text-right">Opening Fee</TableHead>
             <TableHead className="text-right">Closing Fee</TableHead>
             <TableHead className="text-right">Borrowing Fee</TableHead>
@@ -150,6 +169,13 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
               <TableCell className="text-right font-mono text-sm">
                 {trade.collateral ? `$${trade.collateral.toFixed(2)}` : "-"}
               </TableCell>
+              <TableCell className="text-right font-mono text-sm">
+                {trade.amountReceived !== undefined ? (
+                  <span className={trade.amountReceived >= (trade.collateral || 0) ? "text-emerald-500" : "text-red-500"}>
+                    ${trade.amountReceived.toFixed(2)}
+                  </span>
+                ) : "-"}
+              </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {trade.openingFee !== undefined ? `$${trade.openingFee.toFixed(4)}` : "-"}
               </TableCell>
@@ -196,6 +222,7 @@ const NETWORK_CONFIG = {
 export default function Home() {
   const [searchAddress, setSearchAddress] = useState<string | null>(null);
   const [network, setNetwork] = useState<Network>("mainnet");
+  const [pnlDisplayMode, setPnlDisplayMode] = useState<PnlDisplayMode>("percent");
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -228,8 +255,13 @@ export default function Home() {
   const closeTrades = trades.filter(t => t.type === "close" && t.profitPct !== undefined);
   const wins = closeTrades.filter(t => (t.profitPct ?? 0) > 0).length;
   const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
-  const totalPnl = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
-  const pnlTrend = totalPnl > 0 ? "up" : totalPnl < 0 ? "down" : "neutral";
+  const totalPnlPct = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
+  const totalPnlDollars = closeTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
+  const pnlTrend = totalPnlDollars > 0 ? "up" : totalPnlDollars < 0 ? "down" : "neutral";
+  
+  const togglePnlMode = () => {
+    setPnlDisplayMode(prev => prev === "percent" ? "dollars" : "percent");
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -339,10 +371,16 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <StatsCard
                 title="Total P&L"
-                value={trades.length > 0 ? `${totalPnl >= 0 ? "+" : ""}${(totalPnl * 100).toFixed(2)}%` : "-"}
-                icon={totalPnl >= 0 ? TrendingUp : TrendingDown}
+                value={trades.length > 0 
+                  ? pnlDisplayMode === "percent"
+                    ? `${totalPnlPct >= 0 ? "+" : ""}${(totalPnlPct * 100).toFixed(2)}%`
+                    : `${totalPnlDollars >= 0 ? "+" : ""}$${Math.abs(totalPnlDollars).toFixed(2)}`
+                  : "-"}
+                icon={totalPnlDollars >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
                 loading={isLoading}
+                onToggle={togglePnlMode}
+                toggleLabel={pnlDisplayMode === "percent" ? "Show $" : "Show %"}
               />
               <StatsCard
                 title="Win Rate"
