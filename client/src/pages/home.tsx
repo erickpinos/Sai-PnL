@@ -298,9 +298,6 @@ export default function Home() {
   
   const toggleAfterFees = () => {
     setShowAfterFees(prev => !prev);
-    if (pnlDisplayMode === "percent") {
-      setPnlDisplayMode("dollars");
-    }
   };
 
   return (
@@ -412,14 +409,14 @@ export default function Home() {
               <StatsCard
                 title="Total P&L"
                 value={trades.length > 0 
-                  ? pnlDisplayMode === "percent" && !showAfterFees
+                  ? pnlDisplayMode === "percent"
                     ? `${totalPnlPct >= 0 ? "+" : ""}${(totalPnlPct * 100).toFixed(2)}%`
                     : `${displayPnl >= 0 ? "+" : ""}$${Math.abs(displayPnl).toFixed(2)}`
                   : "-"}
                 icon={displayPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
                 loading={isLoading}
-                onToggle={!showAfterFees ? togglePnlMode : undefined}
+                onToggle={togglePnlMode}
                 toggleLabel={pnlDisplayMode === "percent" ? "%" : "$"}
                 onToggle2={toggleAfterFees}
                 toggleLabel2={showAfterFees ? "After Fees" : "Before Fees"}
