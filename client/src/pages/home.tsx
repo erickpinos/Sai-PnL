@@ -183,11 +183,7 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
                 )}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
-                {trade.amountReceived !== undefined ? (
-                  <span className={trade.amountReceived >= (trade.collateral || 0) ? "text-emerald-500" : "text-red-500"}>
-                    ${trade.amountReceived.toFixed(2)}
-                  </span>
-                ) : "-"}
+                {trade.amountReceived !== undefined ? `$${trade.amountReceived.toFixed(2)}` : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {trade.openingFee !== undefined ? `$${trade.openingFee.toFixed(4)}` : "-"}
@@ -201,7 +197,7 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {trade.triggerFee !== undefined && trade.triggerFee > 0 ? `$${trade.triggerFee.toFixed(4)}` : "-"}
               </TableCell>
-              <TableCell className="text-right font-mono text-sm text-muted-foreground">
+              <TableCell className="text-right font-mono text-sm">
                 {trade.amountReceived !== undefined && trade.totalFees !== undefined 
                   ? `$${(trade.amountReceived - trade.totalFees).toFixed(2)}`
                   : "-"}
