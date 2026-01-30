@@ -32,4 +32,11 @@ export interface TradesResponse {
   winRate: number;
   totalTrades: number;
   explorer?: string;
+  pagination?: {
+    currentPage: number;
+    hasMore: boolean;
+    fromBlock: number;
+    toBlock: number;
+    latestBlock: number;
+  };
 }

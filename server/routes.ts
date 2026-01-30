@@ -217,8 +217,21 @@ async function getLogsInChunks(rpcUrl: string, fromBlock: number, toBlock: numbe
   return allLogs;
 }
 
+interface PaginatedResult {
+  trades: Trade[];
+  pagination: {
+    currentPage: number;
+    hasMore: boolean;
+    fromBlock: number;
+    toBlock: number;
+    latestBlock: number;
+  };
+}
+
+const BLOCKS_PER_PAGE = 9000;
+
 // Get transaction count and recent transactions
-async function getAddressTransactions(rpcUrl: string, address: string): Promise<Trade[]> {
+async function getAddressTransactions(rpcUrl: string, address: string, page: number = 0): Promise<PaginatedResult> {
   const trades: Trade[] = [];
   const lowerAddress = address.toLowerCase();
   
@@ -227,13 +240,15 @@ async function getAddressTransactions(rpcUrl: string, address: string): Promise<
     const latestBlock = await rpcCall(rpcUrl, "eth_blockNumber", []);
     const latestBlockNum = parseInt(latestBlock, 16);
     
-    // Search last 50000 blocks (about 1 day with ~1.8s blocks)
-    const blocksToSearch = 50000;
-    const fromBlock = Math.max(0, latestBlockNum - blocksToSearch);
+    // Calculate block range for this page (page 0 = most recent blocks)
+    const toBlock = latestBlockNum - (page * BLOCKS_PER_PAGE);
+    const fromBlock = Math.max(0, toBlock - BLOCKS_PER_PAGE + 1);
     
+    // Check if there are more blocks to scan
+    const hasMore = fromBlock > 0;
     
-    // Get logs from WASM precompile with the Sai Perps event topic in chunks
-    const logs = await getLogsInChunks(rpcUrl, fromBlock, latestBlockNum, WASM_PRECOMPILE, [WASM_EVENT_TOPIC]);
+    // Get logs from WASM precompile with the Sai Perps event topic (single chunk since we're only doing 9000 blocks)
+    const logs = await getLogsInChunks(rpcUrl, fromBlock, toBlock, WASM_PRECOMPILE, [WASM_EVENT_TOPIC]);
 
 
     // First pass: identify transactions that contain our address
@@ -440,14 +455,33 @@ async function getAddressTransactions(rpcUrl: string, address: string): Promise<
       trades.push(trade);
     }
 
+    // Sort by timestamp descending
+    trades.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    
+    return {
+      trades,
+      pagination: {
+        currentPage: page,
+        hasMore,
+        fromBlock,
+        toBlock,
+        latestBlock: latestBlockNum,
+      },
+    };
   } catch (error) {
     console.error("Error fetching transactions:", error);
+    // Return empty result with pagination on error
+    return {
+      trades: [],
+      pagination: {
+        currentPage: page,
+        hasMore: false,
+        fromBlock: 0,
+        toBlock: 0,
+        latestBlock: 0,
+      },
+    };
   }
-
-  // Sort by timestamp descending
-  trades.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  
-  return trades;
 }
 
 export async function registerRoutes(
@@ -459,6 +493,7 @@ export async function registerRoutes(
   app.get("/api/trades", async (req, res) => {
     const address = req.query.address as string;
     const network = (req.query.network as string) || "mainnet";
+    const page = parseInt(req.query.page as string) || 0;
     
     if (!address) {
       return res.status(400).json({ error: "Address is required" });
@@ -474,24 +509,30 @@ export async function registerRoutes(
       return res.status(400).json({ error: "Invalid network. Use 'mainnet' or 'testnet'" });
     }
 
+    // Validate page
+    if (page < 0) {
+      return res.status(400).json({ error: "Invalid page number" });
+    }
+
     const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
 
     try {
-      const trades = await getAddressTransactions(networkConfig.rpc, address);
+      const result = await getAddressTransactions(networkConfig.rpc, address, page);
       
       // Calculate stats
-      const closeTrades = trades.filter(t => t.type === "close" && t.profitPct !== undefined);
+      const closeTrades = result.trades.filter(t => t.type === "close" && t.profitPct !== undefined);
       const wins = closeTrades.filter(t => (t.profitPct ?? 0) > 0).length;
       const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
       const totalPnl = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
 
       const response: TradesResponse = {
         address,
-        trades,
+        trades: result.trades,
         totalPnl,
         winRate,
-        totalTrades: trades.length,
+        totalTrades: result.trades.length,
         explorer: networkConfig.explorer,
+        pagination: result.pagination,
       };
 
       res.json(response);

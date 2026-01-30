@@ -1,9 +1,9 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, ExternalLink, Loader2, Wallet, ChevronDown } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, ExternalLink, Loader2, Wallet, ChevronDown, History } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,9 @@ import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigge
 import type { TradesResponse, Trade } from "@shared/schema";
 
 const addressSchema = z.object({
-  address: z.string().regex(/^0x[a-fA-F0-9]{40}$/, "Please enter a valid EVM address"),
+  address: z.string()
+    .regex(/^0x[a-fA-F0-9]{40}$/i, "Please enter a valid EVM address")
+    .transform(addr => addr.toLowerCase()),
 });
 
 type AddressForm = z.infer<typeof addressSchema>;
@@ -191,6 +193,10 @@ const NETWORK_CONFIG = {
 export default function Home() {
   const [searchAddress, setSearchAddress] = useState<string | null>(null);
   const [network, setNetwork] = useState<Network>("mainnet");
+  const [currentPage, setCurrentPage] = useState(0);
+  const [accumulatedTrades, setAccumulatedTrades] = useState<Trade[]>([]);
+  const [hasMore, setHasMore] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -200,11 +206,23 @@ export default function Home() {
   });
 
   const { data, isLoading, error } = useQuery<TradesResponse>({
-    queryKey: ["/api/trades", searchAddress, network],
+    queryKey: ["/api/trades", searchAddress, network, currentPage],
     queryFn: async () => {
-      const res = await fetch(`/api/trades?address=${searchAddress}&network=${network}`);
+      const res = await fetch(`/api/trades?address=${searchAddress}&network=${network}&page=${currentPage}`);
       if (!res.ok) throw new Error("Failed to fetch trades");
-      return res.json();
+      const result = await res.json();
+      
+      // On first page, replace trades; on subsequent pages, append
+      if (currentPage === 0) {
+        setAccumulatedTrades(result.trades);
+      } else {
+        setAccumulatedTrades(prev => [...prev, ...result.trades]);
+      }
+      
+      setHasMore(result.pagination?.hasMore ?? false);
+      setIsLoadingMore(false);
+      
+      return result;
     },
     enabled: !!searchAddress,
   });
@@ -212,10 +230,33 @@ export default function Home() {
   const explorerUrl = data?.explorer || NETWORK_CONFIG[network].explorer;
 
   const onSubmit = (values: AddressForm) => {
+    // Reset pagination when searching new address
+    setCurrentPage(0);
+    setAccumulatedTrades([]);
+    setHasMore(false);
     setSearchAddress(values.address);
   };
 
-  const totalPnl = data?.totalPnl ?? 0;
+  const handleLoadMore = useCallback(() => {
+    if (hasMore && !isLoadingMore) {
+      setIsLoadingMore(true);
+      setCurrentPage(prev => prev + 1);
+    }
+  }, [hasMore, isLoadingMore]);
+
+  // Function to change network and reset pagination
+  const handleNetworkChange = (newNetwork: Network) => {
+    setNetwork(newNetwork);
+    setCurrentPage(0);
+    setAccumulatedTrades([]);
+    setHasMore(false);
+  };
+
+  // Calculate stats from accumulated trades
+  const closeTrades = accumulatedTrades.filter(t => t.type === "close" && t.profitPct !== undefined);
+  const wins = closeTrades.filter(t => (t.profitPct ?? 0) > 0).length;
+  const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
+  const totalPnl = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
   const pnlTrend = totalPnl > 0 ? "up" : totalPnl < 0 ? "down" : "neutral";
 
   return (
@@ -242,14 +283,14 @@ export default function Home() {
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem 
-                onClick={() => setNetwork("mainnet")}
+                onClick={() => handleNetworkChange("mainnet")}
                 data-testid="menu-item-mainnet"
               >
                 <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
                 Mainnet
               </DropdownMenuItem>
               <DropdownMenuItem 
-                onClick={() => setNetwork("testnet")}
+                onClick={() => handleNetworkChange("testnet")}
                 data-testid="menu-item-testnet"
               >
                 <span className="w-2 h-2 rounded-full bg-amber-500 mr-2" />
@@ -326,24 +367,24 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <StatsCard
                 title="Total P&L"
-                value={data ? `${totalPnl >= 0 ? "+" : ""}${(totalPnl * 100).toFixed(2)}%` : "-"}
+                value={accumulatedTrades.length > 0 ? `${totalPnl >= 0 ? "+" : ""}${(totalPnl * 100).toFixed(2)}%` : "-"}
                 icon={totalPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
-                loading={isLoading}
+                loading={isLoading && currentPage === 0}
               />
               <StatsCard
                 title="Win Rate"
-                value={data ? `${(data.winRate * 100).toFixed(1)}%` : "-"}
+                value={accumulatedTrades.length > 0 ? `${(winRate * 100).toFixed(1)}%` : "-"}
                 icon={Activity}
-                trend={data && data.winRate >= 0.5 ? "up" : "neutral"}
-                loading={isLoading}
+                trend={winRate >= 0.5 ? "up" : "neutral"}
+                loading={isLoading && currentPage === 0}
               />
               <StatsCard
                 title="Total Trades"
-                value={data ? data.totalTrades.toString() : "-"}
+                value={accumulatedTrades.length > 0 ? accumulatedTrades.length.toString() : "-"}
                 icon={Activity}
                 trend="neutral"
-                loading={isLoading}
+                loading={isLoading && currentPage === 0}
               />
             </div>
 
@@ -360,7 +401,32 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TradesTable trades={data?.trades ?? []} loading={isLoading} explorerUrl={explorerUrl} />
+                <TradesTable trades={accumulatedTrades} loading={isLoading && currentPage === 0} explorerUrl={explorerUrl} />
+                
+                {/* Load More Button */}
+                {hasMore && !isLoading && (
+                  <div className="mt-6 flex justify-center">
+                    <Button
+                      variant="outline"
+                      onClick={handleLoadMore}
+                      disabled={isLoadingMore}
+                      data-testid="button-load-more"
+                      className="gap-2"
+                    >
+                      {isLoadingMore ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                          Loading...
+                        </>
+                      ) : (
+                        <>
+                          <History className="h-4 w-4" />
+                          Load More History
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                )}
               </CardContent>
             </Card>
           </>
