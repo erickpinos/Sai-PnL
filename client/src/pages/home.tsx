@@ -201,12 +201,10 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {trade.triggerFee !== undefined && trade.triggerFee > 0 ? `$${trade.triggerFee.toFixed(4)}` : "-"}
               </TableCell>
-              <TableCell className="text-right font-mono text-sm">
-                {trade.amountReceived !== undefined && trade.totalFees !== undefined ? (
-                  <span className={(trade.amountReceived - trade.totalFees) >= (trade.collateral || 0) ? "text-emerald-500" : "text-red-500"}>
-                    ${(trade.amountReceived - trade.totalFees).toFixed(2)}
-                  </span>
-                ) : "-"}
+              <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                {trade.amountReceived !== undefined && trade.totalFees !== undefined 
+                  ? `$${(trade.amountReceived - trade.totalFees).toFixed(2)}`
+                  : "-"}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleString(undefined, {
