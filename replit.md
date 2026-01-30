@@ -4,21 +4,20 @@ A web application for tracking profit and loss on Sai Perps trades on Nibiru.
 
 ## Overview
 
-This application allows users to enter a Nibiru address and view their Sai Perps trading history with detailed profit/loss information per trade.
+This application allows users to enter a Nibiru EVM address (0x format) and view their Sai Perps trading history with detailed profit/loss information per trade.
 
 ## Features
 
-- Enter any Nibiru address to analyze trading history
+- Enter any Nibiru EVM address (0x format) to analyze trading history
 - Switch between Mainnet and Testnet networks
 - View total P&L, win rate, and trade count
 - Detailed trade history table with:
-  - Trade type (open/close)
-  - Direction (long/short)
+  - Trading pair (e.g., BTC)
+  - Direction (long/short) with leverage
   - Entry/exit prices
-  - P&L percentage
-  - Collateral and fees
+  - P&L percentage and amount
+  - Collateral
   - Links to nibiscan.io for each transaction
-- Pagination with "Load More History" button to fetch older trades
 
 ## Architecture
 
@@ -29,32 +28,37 @@ This application allows users to enter a Nibiru address and view their Sai Perps
 - shadcn/ui components with dark crypto-themed design
 
 ### Backend (Express)
-- **server/routes.ts**: API endpoint `/api/trades?address=<address>&network=<mainnet|testnet>&page=<number>`
-- Fetches data from Nibiru via JSON-RPC
-- Parses WASM event logs to extract trade information
-- Paginated: scans 9,000 blocks per page for faster initial load
+- **server/routes.ts**: API endpoint `/api/trades?address=<address>&network=<mainnet|testnet>&limit=<number>&offset=<number>`
+- Fetches data from Sai Keeper GraphQL API
+- Converts EVM addresses (0x) to Nibiru bech32 format (nibi1) for API queries
+- Merges trade data with trade history to get accurate realized P&L
 
 ### Data Flow
-1. User enters Nibiru address
-2. Frontend calls `/api/trades?address=<address>`
-3. Backend queries Nibiru RPC for transaction logs
-4. Parses event data to extract trade info (open/close, prices, P&L)
-5. Returns structured trade data with stats
+1. User enters Nibiru EVM address (0x format)
+2. Frontend calls `/api/trades?address=<address>&network=<network>`
+3. Backend converts 0x address to nibi1 bech32 format using bech32 library
+4. Backend queries Sai Keeper GraphQL API for trades and trade history
+5. Merges trade data with realized P&L from trade history
+6. Returns structured trade data with stats
 
 ## Technical Details
 
-### Nibiru Integration
-- Mainnet RPC: `https://evm-rpc.nibiru.fi`
-- Testnet RPC: `https://evm-rpc.testnet-2.nibiru.fi`
-- Sai Perps Contract: `0x9F48A925Dda8528b3A5c2A6717Df0F03c8b167c0`
-- WASM Precompile: `0x0000000000000000000000000000000000000802`
-- Block scan: 9,000 blocks per page (RPC limit is 10,000)
+### Sai Keeper GraphQL API
+- Mainnet: `https://sai-keeper.nibiru.fi/query`
+- Testnet: `https://sai-keeper.testnet-2.nibiru.fi/query`
 
-### Event Types Parsed
-- `sai/perp/user_close_order` - Close trade with P&L
-- `sai/perp/handle_trade_pnl` - Trade profit/loss details
-- `sai/perp/process_closing_fees` - Fee information
-- `register_trade` / `open_trade` - Open position events
+### Address Conversion
+- User inputs EVM address: `0x5DBa7Aa28074201a2c3Abe4e743Adaf8E74BD183`
+- Backend converts to bech32: `nibi1tka84g5qwssp5tp6he88gwk6lrn5h5vrumrhqx`
+- Uses bech32 library with "nibi" prefix
+
+### GraphQL Queries
+- `trades` query: Returns trade list with open/close status, prices, leverage
+- `tradeHistory` query: Returns `realizedPnlPct` and `realizedPnlCollateral` for closed trades
+
+### P&L Data Sources
+- For closed trades: `realizedPnlPct` from `tradeHistory` query
+- For open trades: `state.pnlPct` from `trades` query (unrealized P&L)
 
 ## Running the App
 
@@ -66,6 +70,8 @@ The app runs on port 5000.
 
 ## Recent Changes
 
-- 2026-01-30: Added pagination - scans 9,000 blocks at a time with "Load More History" button for faster initial load (~5s vs 15-20s)
+- 2026-01-30: Refactored to use Sai Keeper GraphQL API for instant data retrieval (vs slow RPC block scanning)
+- 2026-01-30: Added EVM to bech32 address conversion
+- 2026-01-30: Fixed P&L display by merging trade data with trade history for realized P&L
 - 2026-01-30: Added network switching between Mainnet and Testnet
 - 2026-01-27: Initial implementation with dark crypto theme, address search, and trade history display
