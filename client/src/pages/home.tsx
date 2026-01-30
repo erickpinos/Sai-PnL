@@ -31,6 +31,8 @@ function StatsCard({
   loading,
   onToggle,
   toggleLabel,
+  onToggle2,
+  toggleLabel2,
 }: { 
   title: string; 
   value: string; 
@@ -39,11 +41,13 @@ function StatsCard({
   loading?: boolean;
   onToggle?: () => void;
   toggleLabel?: string;
+  onToggle2?: () => void;
+  toggleLabel2?: string;
 }) {
   return (
     <Card>
       <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <CardDescription className="text-sm font-medium">{title}</CardDescription>
           {onToggle && (
             <Button 
@@ -54,6 +58,17 @@ function StatsCard({
               data-testid="button-toggle-pnl"
             >
               {toggleLabel}
+            </Button>
+          )}
+          {onToggle2 && (
+            <Button 
+              variant="outline" 
+              size="sm" 
+              className="h-6 px-2 text-xs"
+              onClick={onToggle2}
+              data-testid="button-toggle-fees"
+            >
+              {toggleLabel2}
             </Button>
           )}
         </div>
@@ -237,6 +252,7 @@ export default function Home() {
   const [searchAddress, setSearchAddress] = useState<string | null>(null);
   const [network, setNetwork] = useState<Network>("mainnet");
   const [pnlDisplayMode, setPnlDisplayMode] = useState<PnlDisplayMode>("percent");
+  const [showAfterFees, setShowAfterFees] = useState(false);
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -271,10 +287,20 @@ export default function Home() {
   const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
   const totalPnlPct = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
   const totalPnlDollars = closeTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
-  const pnlTrend = totalPnlDollars > 0 ? "up" : totalPnlDollars < 0 ? "down" : "neutral";
+  const totalFees = closeTrades.reduce((sum, t) => sum + (t.totalFees ?? 0), 0);
+  const totalPnlAfterFees = totalPnlDollars - totalFees;
+  const displayPnl = showAfterFees ? totalPnlAfterFees : totalPnlDollars;
+  const pnlTrend = displayPnl > 0 ? "up" : displayPnl < 0 ? "down" : "neutral";
   
   const togglePnlMode = () => {
     setPnlDisplayMode(prev => prev === "percent" ? "dollars" : "percent");
+  };
+  
+  const toggleAfterFees = () => {
+    setShowAfterFees(prev => !prev);
+    if (pnlDisplayMode === "percent") {
+      setPnlDisplayMode("dollars");
+    }
   };
 
   return (
@@ -384,17 +410,19 @@ export default function Home() {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <StatsCard
-                title="Total P&L"
+                title={showAfterFees ? "Total P&L After Fees" : "Total P&L"}
                 value={trades.length > 0 
-                  ? pnlDisplayMode === "percent"
+                  ? pnlDisplayMode === "percent" && !showAfterFees
                     ? `${totalPnlPct >= 0 ? "+" : ""}${(totalPnlPct * 100).toFixed(2)}%`
-                    : `${totalPnlDollars >= 0 ? "+" : ""}$${Math.abs(totalPnlDollars).toFixed(2)}`
+                    : `${displayPnl >= 0 ? "+" : ""}$${Math.abs(displayPnl).toFixed(2)}`
                   : "-"}
-                icon={totalPnlDollars >= 0 ? TrendingUp : TrendingDown}
+                icon={displayPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
                 loading={isLoading}
-                onToggle={togglePnlMode}
+                onToggle={!showAfterFees ? togglePnlMode : undefined}
                 toggleLabel={pnlDisplayMode === "percent" ? "Show $" : "Show %"}
+                onToggle2={toggleAfterFees}
+                toggleLabel2={showAfterFees ? "Before Fees" : "After Fees"}
               />
               <StatsCard
                 title="Win Rate"
