@@ -120,6 +120,28 @@ const TRADE_HISTORY_QUERY = `
   }
 `;
 
+// GraphQL query for fee transactions
+const FEE_TRANSACTIONS_QUERY = `
+  query GetFeeTransactions($trader: String!, $limit: Int) {
+    fee {
+      feeTransactions(
+        filter: { traderAddress: $trader }
+        limit: $limit
+      ) {
+        id
+        tradeId
+        feeType
+        totalFeeCharged
+        govFee
+        vaultFee
+        referrerAllocation
+        triggerFee
+        blockTime
+      }
+    }
+  }
+`;
+
 interface GraphQLResponse<T> {
   data?: T;
   errors?: Array<{ message: string }>;
@@ -205,6 +227,24 @@ interface TradeHistoryQueryResult {
   };
 }
 
+interface FeeTransaction {
+  id: string;
+  tradeId: number;
+  feeType: "OPENING" | "CLOSING";
+  totalFeeCharged: number;
+  govFee: number;
+  vaultFee: number;
+  referrerAllocation: number;
+  triggerFee: number;
+  blockTime: string;
+}
+
+interface FeeTransactionsQueryResult {
+  fee: {
+    feeTransactions: FeeTransaction[];
+  };
+}
+
 async function graphqlQuery<T>(endpoint: string, query: string, variables: Record<string, any>): Promise<T> {
   const response = await fetch(endpoint, {
     method: "POST",
@@ -228,7 +268,7 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 }
 
 // Convert GraphQL trade data to our Trade type
-function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number; borrowingFee?: number; closingFee?: number; totalFees?: number }>): Trade {
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number; openingFee?: number; closingFee?: number; totalFees?: number }>, feeMap: Map<number, { openingFee: number; closingFee: number; govFee: number; vaultFee: number; triggerFee: number }>): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
@@ -248,27 +288,26 @@ function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number
     closeTimestamp: perpTrade.closeBlock?.block_ts,
   };
   
+  // Get fees from feeMap
+  const fees = feeMap.get(perpTrade.id);
+  if (fees) {
+    trade.openingFee = fees.openingFee;
+    trade.closingFee = fees.closingFee;
+    trade.totalFees = fees.openingFee + fees.closingFee;
+  }
+  
   if (!isOpen) {
     trade.closePrice = perpTrade.closePrice || undefined;
     // First try to get P&L from state (for open trades with unrealized P&L)
     if (perpTrade.state) {
       trade.profitPct = perpTrade.state.pnlPct;
       trade.pnlAmount = perpTrade.state.pnlCollateralAfterFees / 1e6;
-      trade.borrowingFee = perpTrade.state.borrowingFeeCollateral / 1e6;
-      trade.closingFee = perpTrade.state.closingFeeCollateral / 1e6;
-      trade.totalFees = (perpTrade.state.borrowingFeeCollateral + perpTrade.state.closingFeeCollateral) / 1e6;
     } else {
       // For closed trades, get realized P&L from trade history map
       const pnlData = pnlMap.get(perpTrade.id);
       if (pnlData) {
         trade.profitPct = pnlData.pnlPct;
         trade.pnlAmount = pnlData.pnlAmount;
-        // Fees from pnlMap if available
-        if (pnlData.borrowingFee !== undefined) {
-          trade.borrowingFee = pnlData.borrowingFee;
-          trade.closingFee = pnlData.closingFee;
-          trade.totalFees = pnlData.totalFees;
-        }
       }
     }
   }
@@ -338,7 +377,7 @@ export async function registerRoutes(
     console.log(`Converting ${address} to ${nibiAddress}`);
 
     try {
-      // Fetch trades from Sai Keeper GraphQL API
+      // Fetch trades and trade history from Sai Keeper GraphQL API
       const [tradesResult, historyResult] = await Promise.all([
         graphqlQuery<TradesQueryResult>(networkConfig.graphql, TRADES_QUERY, {
           trader: nibiAddress,
@@ -352,20 +391,53 @@ export async function registerRoutes(
         }),
       ]);
       
+      // Try to fetch fee transactions (may not be available on all endpoints)
+      let feesResult: FeeTransactionsQueryResult | null = null;
+      try {
+        feesResult = await graphqlQuery<FeeTransactionsQueryResult>(networkConfig.graphql, FEE_TRANSACTIONS_QUERY, {
+          trader: nibiAddress,
+          limit: limit * 4,
+        });
+      } catch (feeError) {
+        console.log("Fee API not available, continuing without fee data");
+      }
+      
+      // Build a map of trade ID to fees (opening + closing)
+      const feeMap = new Map<number, { openingFee: number; closingFee: number; govFee: number; vaultFee: number; triggerFee: number }>();
+      if (feesResult?.fee?.feeTransactions) {
+        for (const feeTx of feesResult.fee.feeTransactions) {
+          const existing = feeMap.get(feeTx.tradeId) || { openingFee: 0, closingFee: 0, govFee: 0, vaultFee: 0, triggerFee: 0 };
+          const feeAmount = feeTx.totalFeeCharged / 1e6;
+          if (feeTx.feeType === "OPENING") {
+            existing.openingFee += feeAmount;
+          } else {
+            existing.closingFee += feeAmount;
+          }
+          existing.govFee += feeTx.govFee / 1e6;
+          existing.vaultFee += feeTx.vaultFee / 1e6;
+          existing.triggerFee += feeTx.triggerFee / 1e6;
+          feeMap.set(feeTx.tradeId, existing);
+        }
+      }
+      
       // Build a map of trade ID to realized P&L from trade history
       const pnlMap = new Map<number, { 
         pnlPct: number; 
         pnlAmount: number;
-        borrowingFee?: number;
+        openingFee?: number;
         closingFee?: number;
         totalFees?: number;
       }>();
       const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
       for (const historyItem of historyResult.perp.tradeHistory) {
         if (closeTypes.includes(historyItem.tradeChangeType) && historyItem.realizedPnlPct !== null) {
+          const fees = feeMap.get(historyItem.trade.id);
           pnlMap.set(historyItem.trade.id, {
             pnlPct: historyItem.realizedPnlPct,
             pnlAmount: (historyItem.realizedPnlCollateral || 0) / 1e6,
+            openingFee: fees?.openingFee,
+            closingFee: fees?.closingFee,
+            totalFees: fees ? (fees.openingFee + fees.closingFee) : undefined,
           });
         }
       }
@@ -376,7 +448,7 @@ export async function registerRoutes(
       
       // First, add trades from the trades query (includes open positions)
       for (const perpTrade of tradesResult.perp.trades) {
-        const trade = convertTrade(perpTrade, pnlMap);
+        const trade = convertTrade(perpTrade, pnlMap, feeMap);
         trades.push(trade);
         seenTradeIds.add(perpTrade.id);
       }

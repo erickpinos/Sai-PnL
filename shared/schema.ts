@@ -16,7 +16,7 @@ export const tradeSchema = z.object({
   tradeIndex: z.string().optional(),
   openTimestamp: z.string().optional(),
   closeTimestamp: z.string().optional(),
-  borrowingFee: z.number().optional(),
+  openingFee: z.number().optional(),
   closingFee: z.number().optional(),
   totalFees: z.number().optional(),
 });
