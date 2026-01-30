@@ -15,6 +15,8 @@ export const tradeSchema = z.object({
   pnlAmount: z.number().optional(),
   fees: z.number().optional(),
   tradeIndex: z.string().optional(),
+  openTimestamp: z.string().optional(),
+  closeTimestamp: z.string().optional(),
 });
 
 export type Trade = z.infer<typeof tradeSchema>;

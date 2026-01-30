@@ -88,28 +88,20 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
       <Table>
         <TableHeader>
           <TableRow>
-            <TableHead>Type</TableHead>
             <TableHead>Pair</TableHead>
             <TableHead>Direction</TableHead>
             <TableHead className="text-right">Leverage</TableHead>
-            <TableHead className="text-right">Price</TableHead>
+            <TableHead className="text-right">Entry Price</TableHead>
+            <TableHead className="text-right">Exit Price</TableHead>
             <TableHead className="text-right">P&L %</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
-            <TableHead className="text-right">Fees</TableHead>
-            <TableHead>Time</TableHead>
+            <TableHead>Time Opened</TableHead>
+            <TableHead>Time Closed</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {trades.map((trade) => (
             <TableRow key={trade.txHash} data-testid={`row-trade-${trade.txHash.slice(0, 8)}`}>
-              <TableCell>
-                <Badge 
-                  variant={trade.type === "open" ? "default" : "secondary"}
-                  className={trade.type === "open" ? "bg-primary/20 text-primary border-primary/30" : ""}
-                >
-                  {trade.type === "open" ? "Open" : "Close"}
-                </Badge>
-              </TableCell>
               <TableCell className="font-medium">
                 {trade.pair || "-"}
               </TableCell>
@@ -135,12 +127,10 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
                 {trade.leverage ? `${trade.leverage}x` : "-"}
               </TableCell>
               <TableCell className="text-right font-mono">
-                {trade.type === "open" && trade.openPrice 
-                  ? `$${trade.openPrice.toLocaleString()}`
-                  : trade.closePrice 
-                    ? `$${trade.closePrice.toLocaleString()}`
-                    : "-"
-                }
+                {trade.openPrice ? `$${trade.openPrice.toLocaleString()}` : "-"}
+              </TableCell>
+              <TableCell className="text-right font-mono">
+                {trade.closePrice ? `$${trade.closePrice.toLocaleString()}` : "-"}
               </TableCell>
               <TableCell className="text-right">
                 {trade.profitPct !== undefined ? (
@@ -156,16 +146,21 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
               <TableCell className="text-right font-mono text-sm">
                 {trade.collateral ? `$${trade.collateral.toFixed(2)}` : "-"}
               </TableCell>
-              <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {trade.fees ? `$${trade.fees.toFixed(4)}` : "-"}
-              </TableCell>
               <TableCell className="text-sm text-muted-foreground">
-                {new Date(trade.timestamp).toLocaleString(undefined, {
+                {trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleString(undefined, {
                   month: "short",
                   day: "numeric",
                   hour: "2-digit",
                   minute: "2-digit",
-                })}
+                }) : "-"}
+              </TableCell>
+              <TableCell className="text-sm text-muted-foreground">
+                {trade.closeTimestamp ? new Date(trade.closeTimestamp).toLocaleString(undefined, {
+                  month: "short",
+                  day: "numeric",
+                  hour: "2-digit",
+                  minute: "2-digit",
+                }) : "-"}
               </TableCell>
             </TableRow>
           ))}

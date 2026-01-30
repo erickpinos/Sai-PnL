@@ -244,6 +244,8 @@ function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number
     collateral: perpTrade.openCollateralAmount / 1e6,
     openPrice: perpTrade.openPrice,
     tradeIndex: String(perpTrade.id),
+    openTimestamp: perpTrade.openBlock?.block_ts,
+    closeTimestamp: perpTrade.closeBlock?.block_ts,
   };
   
   if (!isOpen) {
