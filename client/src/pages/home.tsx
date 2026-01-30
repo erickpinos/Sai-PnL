@@ -113,12 +113,12 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
             <TableHead className="text-right">Exit Price</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
             <TableHead className="text-right">{pnlDisplayMode === "percent" ? "P&L %" : "P&L $"}</TableHead>
-            <TableHead className="text-right">Revenue</TableHead>
+            <TableHead className="text-right">Returned</TableHead>
             <TableHead className="text-right">Opening Fee</TableHead>
             <TableHead className="text-right">Closing Fee</TableHead>
             <TableHead className="text-right">Borrowing Fee</TableHead>
             <TableHead className="text-right">Trigger Fee</TableHead>
-            <TableHead className="text-right">Net - Fees</TableHead>
+            <TableHead className="text-right">Net After Fees</TableHead>
             <TableHead>Time Opened</TableHead>
             <TableHead>Time Closed</TableHead>
           </TableRow>
