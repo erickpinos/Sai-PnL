@@ -410,7 +410,7 @@ export default function Home() {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <StatsCard
-                title={showAfterFees ? "Total P&L After Fees" : "Total P&L"}
+                title="Total P&L"
                 value={trades.length > 0 
                   ? pnlDisplayMode === "percent" && !showAfterFees
                     ? `${totalPnlPct >= 0 ? "+" : ""}${(totalPnlPct * 100).toFixed(2)}%`
@@ -420,9 +420,9 @@ export default function Home() {
                 trend={pnlTrend}
                 loading={isLoading}
                 onToggle={!showAfterFees ? togglePnlMode : undefined}
-                toggleLabel={pnlDisplayMode === "percent" ? "Show $" : "Show %"}
+                toggleLabel={pnlDisplayMode === "percent" ? "%" : "$"}
                 onToggle2={toggleAfterFees}
-                toggleLabel2={showAfterFees ? "Before Fees" : "After Fees"}
+                toggleLabel2={showAfterFees ? "After Fees" : "Before Fees"}
               />
               <StatsCard
                 title="Win Rate"
