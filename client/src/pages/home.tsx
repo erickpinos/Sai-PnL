@@ -324,7 +324,7 @@ export default function Home() {
                           <div className="relative">
                             <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                             <Input
-                              placeholder="0x5DBa7Aa28074201a2c3Abe4e743Adaf8E74BD183"
+                              placeholder="0x0000000000000000000000000000000000000000"
                               className="pl-10 font-mono text-sm"
                               data-testid="input-address"
                               {...field}
