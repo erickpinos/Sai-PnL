@@ -228,7 +228,7 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 }
 
 // Convert GraphQL trade data to our Trade type
-function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>): Trade {
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number; borrowingFee?: number; closingFee?: number; totalFees?: number }>): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
@@ -254,13 +254,21 @@ function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number
     if (perpTrade.state) {
       trade.profitPct = perpTrade.state.pnlPct;
       trade.pnlAmount = perpTrade.state.pnlCollateralAfterFees / 1e6;
-      trade.fees = (perpTrade.state.borrowingFeeCollateral + perpTrade.state.closingFeeCollateral) / 1e6;
+      trade.borrowingFee = perpTrade.state.borrowingFeeCollateral / 1e6;
+      trade.closingFee = perpTrade.state.closingFeeCollateral / 1e6;
+      trade.totalFees = (perpTrade.state.borrowingFeeCollateral + perpTrade.state.closingFeeCollateral) / 1e6;
     } else {
       // For closed trades, get realized P&L from trade history map
       const pnlData = pnlMap.get(perpTrade.id);
       if (pnlData) {
         trade.profitPct = pnlData.pnlPct;
         trade.pnlAmount = pnlData.pnlAmount;
+        // Fees from pnlMap if available
+        if (pnlData.borrowingFee !== undefined) {
+          trade.borrowingFee = pnlData.borrowingFee;
+          trade.closingFee = pnlData.closingFee;
+          trade.totalFees = pnlData.totalFees;
+        }
       }
     }
   }
@@ -345,7 +353,13 @@ export async function registerRoutes(
       ]);
       
       // Build a map of trade ID to realized P&L from trade history
-      const pnlMap = new Map<number, { pnlPct: number; pnlAmount: number }>();
+      const pnlMap = new Map<number, { 
+        pnlPct: number; 
+        pnlAmount: number;
+        borrowingFee?: number;
+        closingFee?: number;
+        totalFees?: number;
+      }>();
       const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
       for (const historyItem of historyResult.perp.tradeHistory) {
         if (closeTypes.includes(historyItem.tradeChangeType) && historyItem.realizedPnlPct !== null) {

@@ -13,10 +13,12 @@ export const tradeSchema = z.object({
   closePrice: z.number().optional(),
   profitPct: z.number().optional(),
   pnlAmount: z.number().optional(),
-  fees: z.number().optional(),
   tradeIndex: z.string().optional(),
   openTimestamp: z.string().optional(),
   closeTimestamp: z.string().optional(),
+  borrowingFee: z.number().optional(),
+  closingFee: z.number().optional(),
+  totalFees: z.number().optional(),
 });
 
 export type Trade = z.infer<typeof tradeSchema>;
