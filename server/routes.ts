@@ -227,10 +227,20 @@ interface TransactionReceipt {
   }>;
 }
 
+// Fee data extracted from transaction receipt
+interface ExtractedFees {
+  openingFee: number;
+  closingFee: number;
+  openingTriggerFee: number;
+  closingTriggerFee: number;
+}
+
 // Extract fee data from transaction receipt logs
-function extractFeesFromReceipt(receipt: TransactionReceipt): { openingFee: number; closingFee: number } {
+function extractFeesFromReceipt(receipt: TransactionReceipt): ExtractedFees {
   let openingFee = 0;
   let closingFee = 0;
+  let openingTriggerFee = 0;
+  let closingTriggerFee = 0;
   
   for (const log of receipt.logs) {
     try {
@@ -243,23 +253,32 @@ function extractFeesFromReceipt(receipt: TransactionReceipt): { openingFee: numb
       
       if (json.eventType === 'wasm-sai/perp/process_opening_fees') {
         openingFee = Number(json.total_fee_charged || 0) / 1e6;
+        openingTriggerFee = Number(json.trigger_fee_component || 0) / 1e6;
       } else if (json.eventType === 'wasm-sai/perp/process_closing_fees') {
         closingFee = Number(json.final_closing_fee || 0) / 1e6;
+        closingTriggerFee = Number(json.final_trigger_fee || 0) / 1e6;
       }
     } catch (e) {
       // Skip invalid logs
     }
   }
   
-  return { openingFee, closingFee };
+  return { openingFee, closingFee, openingTriggerFee, closingTriggerFee };
+}
+
+// Fee data structure for a trade
+interface TradeFees {
+  openingFee: number;
+  closingFee: number;
+  triggerFee: number;
 }
 
 // Fetch fees from RPC for a list of transaction hashes
 async function fetchFeesFromRpc(
   rpcUrl: string, 
   txHashes: { tradeId: number; evmTxHash: string; isOpening: boolean }[]
-): Promise<Map<number, { openingFee: number; closingFee: number }>> {
-  const feeMap = new Map<number, { openingFee: number; closingFee: number }>();
+): Promise<Map<number, TradeFees>> {
+  const feeMap = new Map<number, TradeFees>();
   
   // Filter out null hashes and deduplicate
   const validTxs = txHashes.filter(tx => tx.evmTxHash);
@@ -298,11 +317,13 @@ async function fetchFeesFromRpc(
     for (const receipt of receipts) {
       if (!receipt) continue;
       
-      const existing = feeMap.get(receipt.tradeId) || { openingFee: 0, closingFee: 0 };
+      const existing = feeMap.get(receipt.tradeId) || { openingFee: 0, closingFee: 0, triggerFee: 0 };
       if (receipt.isOpening) {
         existing.openingFee = receipt.openingFee;
+        existing.triggerFee += receipt.openingTriggerFee;
       } else {
         existing.closingFee = receipt.closingFee;
+        existing.triggerFee += receipt.closingTriggerFee;
       }
       feeMap.set(receipt.tradeId, existing);
     }
@@ -364,7 +385,7 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 }
 
 // Convert GraphQL trade data to our Trade type
-function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number; openingFee?: number; closingFee?: number; totalFees?: number }>, feeMap: Map<number, { openingFee: number; closingFee: number }>): Trade {
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, feeMap: Map<number, TradeFees>): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
@@ -384,12 +405,24 @@ function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number
     closeTimestamp: perpTrade.closeBlock?.block_ts,
   };
   
-  // Get fees from feeMap
+  // Get fees from feeMap (RPC-based)
   const fees = feeMap.get(perpTrade.id);
   if (fees) {
     trade.openingFee = fees.openingFee;
     trade.closingFee = fees.closingFee;
-    trade.totalFees = fees.openingFee + fees.closingFee;
+    trade.triggerFee = fees.triggerFee;
+    trade.totalFees = fees.openingFee + fees.closingFee + fees.triggerFee;
+  }
+  
+  // Get borrowing fee from GraphQL state (available for open trades, shows accumulated borrowing)
+  if (perpTrade.state) {
+    trade.borrowingFee = perpTrade.state.borrowingFeeCollateral / 1e6;
+    // Update total fees to include borrowing
+    if (trade.totalFees !== undefined) {
+      trade.totalFees += trade.borrowingFee;
+    } else {
+      trade.totalFees = trade.borrowingFee;
+    }
   }
   
   if (!isOpen) {
@@ -516,23 +549,13 @@ export async function registerRoutes(
       console.log(`Got fees for ${feeMap.size} trades`);
       
       // Build a map of trade ID to realized P&L from trade history
-      const pnlMap = new Map<number, { 
-        pnlPct: number; 
-        pnlAmount: number;
-        openingFee?: number;
-        closingFee?: number;
-        totalFees?: number;
-      }>();
+      const pnlMap = new Map<number, { pnlPct: number; pnlAmount: number }>();
       const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
       for (const historyItem of historyResult.perp.tradeHistory) {
         if (closeTypes.includes(historyItem.tradeChangeType) && historyItem.realizedPnlPct !== null) {
-          const fees = feeMap.get(historyItem.trade.id);
           pnlMap.set(historyItem.trade.id, {
             pnlPct: historyItem.realizedPnlPct,
             pnlAmount: (historyItem.realizedPnlCollateral || 0) / 1e6,
-            openingFee: fees?.openingFee,
-            closingFee: fees?.closingFee,
-            totalFees: fees ? (fees.openingFee + fees.closingFee) : undefined,
           });
         }
       }

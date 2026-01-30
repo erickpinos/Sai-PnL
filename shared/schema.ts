@@ -18,6 +18,8 @@ export const tradeSchema = z.object({
   closeTimestamp: z.string().optional(),
   openingFee: z.number().optional(),
   closingFee: z.number().optional(),
+  borrowingFee: z.number().optional(),
+  triggerFee: z.number().optional(),
   totalFees: z.number().optional(),
 });
 

@@ -97,6 +97,8 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
             <TableHead className="text-right">Collateral</TableHead>
             <TableHead className="text-right">Opening Fee</TableHead>
             <TableHead className="text-right">Closing Fee</TableHead>
+            <TableHead className="text-right">Borrowing Fee</TableHead>
+            <TableHead className="text-right">Trigger Fee</TableHead>
             <TableHead>Time Opened</TableHead>
             <TableHead>Time Closed</TableHead>
           </TableRow>
@@ -153,6 +155,12 @@ function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean })
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {trade.closingFee !== undefined ? `$${trade.closingFee.toFixed(4)}` : "-"}
+              </TableCell>
+              <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                {trade.borrowingFee !== undefined ? `$${trade.borrowingFee.toFixed(4)}` : "-"}
+              </TableCell>
+              <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                {trade.triggerFee !== undefined && trade.triggerFee > 0 ? `$${trade.triggerFee.toFixed(4)}` : "-"}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleString(undefined, {

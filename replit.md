@@ -67,8 +67,9 @@ This application allows users to enter a Nibiru EVM address (0x format) and view
 - Mainnet RPC: `https://evm-rpc.nibiru.fi`
 - Testnet RPC: `https://evm-rpc.testnet-2.nibiru.fi`
 - Parse wasm events from transaction logs:
-  - `wasm-sai/perp/process_opening_fees` → `total_fee_charged`
-  - `wasm-sai/perp/process_closing_fees` → `final_closing_fee`
+  - `wasm-sai/perp/process_opening_fees` → `total_fee_charged`, `trigger_fee_component`
+  - `wasm-sai/perp/process_closing_fees` → `final_closing_fee`, `final_trigger_fee`
+- Borrowing fee is from GraphQL state (available for open trades only)
 - Fees are fetched in parallel (batches of 10) for performance
 
 ## Running the App
