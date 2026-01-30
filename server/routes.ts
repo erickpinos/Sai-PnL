@@ -1,487 +1,299 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
 import type { Trade, TradesResponse } from "@shared/schema";
+import { bech32 } from "bech32";
 
-// Network configurations
+// Network configurations for Sai Keeper GraphQL API
 const NETWORKS = {
   mainnet: {
-    rpc: "https://evm-rpc.nibiru.fi",
+    graphql: "https://sai-keeper.nibiru.fi/query",
     explorer: "https://nibiscan.io",
   },
   testnet: {
-    rpc: "https://evm-rpc.testnet-2.nibiru.fi",
+    graphql: "https://sai-keeper.testnet-2.nibiru.fi/query",
     explorer: "https://testnet.nibiscan.io",
   },
 };
 
-const SAI_PERPS_CONTRACT = "0x9F48A925Dda8528b3A5c2A6717Df0F03c8b167c0".toLowerCase();
-const WASM_PRECOMPILE = "0x0000000000000000000000000000000000000802".toLowerCase();
-
-// Event topic signatures for Sai Perps
-const WASM_EVENT_TOPIC = "0xd18c87af9a802d065969706ff77c671073731c5e7a56bf6748098c6014f84800";
-
-interface TransactionReceipt {
-  transactionHash: string;
-  blockNumber: string;
-  logs: Array<{
-    address: string;
-    topics: string[];
-    data: string;
-  }>;
-  to: string | null;
-  from: string;
+// Convert EVM address (0x...) to Nibiru bech32 address (nibi1...)
+function evmToBech32(evmAddress: string): string {
+  const cleanAddress = evmAddress.toLowerCase().replace("0x", "");
+  const addressBytes: number[] = [];
+  for (let i = 0; i < cleanAddress.length; i += 2) {
+    addressBytes.push(parseInt(cleanAddress.substr(i, 2), 16));
+  }
+  const words = bech32.toWords(new Uint8Array(addressBytes));
+  return bech32.encode("nibi", words);
 }
 
-// Decode ABI-encoded bytes to UTF-8 string
-function decodeAbiString(hex: string): string {
-  const cleanHex = hex.startsWith("0x") ? hex.slice(2) : hex;
-  
-  // ABI encoding: first 32 bytes is offset, next 32 bytes is length, then data
-  // Skip first 64 chars (32 bytes offset), read next 64 chars (32 bytes length)
-  if (cleanHex.length >= 128) {
-    const lengthHex = cleanHex.substring(64, 128);
-    const length = parseInt(lengthHex, 16);
-    const dataHex = cleanHex.substring(128, 128 + length * 2);
-    
-    // Convert hex to bytes
-    const bytes: number[] = [];
-    for (let i = 0; i < dataHex.length; i += 2) {
-      const byte = parseInt(dataHex.substr(i, 2), 16);
-      bytes.push(byte);
-    }
-    
-    try {
-      const decoder = new TextDecoder('utf-8');
-      return decoder.decode(new Uint8Array(bytes));
-    } catch {
-      // Fallback to ASCII
-      return bytes.filter(b => b >= 32 && b < 127).map(b => String.fromCharCode(b)).join('');
-    }
-  }
-  
-  // Fallback: just decode as raw hex
-  const bytes: number[] = [];
-  for (let i = 0; i < cleanHex.length; i += 2) {
-    const byte = parseInt(cleanHex.substr(i, 2), 16);
-    if (byte !== 0) bytes.push(byte);
-  }
-  try {
-    const decoder = new TextDecoder('utf-8');
-    return decoder.decode(new Uint8Array(bytes));
-  } catch {
-    return bytes.filter(b => b >= 32 && b < 127).map(b => String.fromCharCode(b)).join('');
-  }
-}
-
-// Parse JSON from hex-encoded event data
-function parseEventData(data: string): any {
-  try {
-    const text = decodeAbiString(data);
-    // Find the start of JSON object
-    const jsonStart = text.indexOf('{');
-    if (jsonStart === -1) return null;
-    
-    // Find matching closing brace, handling nested objects
-    let depth = 0;
-    let jsonEnd = -1;
-    for (let i = jsonStart; i < text.length; i++) {
-      if (text[i] === '{') depth++;
-      else if (text[i] === '}') {
-        depth--;
-        if (depth === 0) {
-          jsonEnd = i;
-          break;
+// GraphQL query for trades
+const TRADES_QUERY = `
+  query GetTrades($trader: String!, $limit: Int, $offset: Int) {
+    perp {
+      trades(
+        where: { trader: $trader }
+        limit: $limit
+        offset: $offset
+        order_by: sequence
+        order_desc: true
+      ) {
+        id
+        trader
+        isOpen
+        isLong
+        tradeType
+        leverage
+        collateralAmount
+        openCollateralAmount
+        openPrice
+        closePrice
+        sl
+        tp
+        perpBorrowing {
+          marketId
+          baseToken {
+            symbol
+            name
+          }
+          collateralToken {
+            symbol
+          }
+        }
+        openBlock {
+          block
+          block_ts
+        }
+        closeBlock {
+          block
+          block_ts
+        }
+        state {
+          pnlCollateral
+          pnlPct
+          pnlCollateralAfterFees
+          positionValue
+          liquidationPrice
+          borrowingFeeCollateral
+          borrowingFeePct
+          closingFeeCollateral
+          closingFeePct
+          remainingCollateralAfterFees
         }
       }
     }
-    
-    if (jsonEnd === -1) return null;
-    
-    const jsonStr = text.substring(jsonStart, jsonEnd + 1);
-    
-    // Try standard JSON parse first
-    try {
-      return JSON.parse(jsonStr);
-    } catch {
-      // If JSON parsing fails, try regex extraction for key fields
-      // This handles malformed JSON with unescaped nested objects
-      const result: any = {};
-      
-      // Extract eventType
-      const eventTypeMatch = jsonStr.match(/"eventType"\s*:\s*"([^"]+)"/);
-      if (eventTypeMatch) result.eventType = eventTypeMatch[1];
-      
-      // Extract profit_pct (the key value we need for P&L)
-      const profitPctMatch = jsonStr.match(/"profit_pct"\s*:\s*"([^"]+)"/);
-      if (profitPctMatch) result.profit_pct = profitPctMatch[1];
-      
-      // Extract close_price
-      const closePriceMatch = jsonStr.match(/"close_price"\s*:\s*"([^"]+)"/);
-      if (closePriceMatch) result.close_price = closePriceMatch[1];
-      
-      // Extract collateral_left
-      const collateralLeftMatch = jsonStr.match(/"collateral_left"\s*:\s*"([^"]+)"/);
-      if (collateralLeftMatch) result.collateral_left = collateralLeftMatch[1];
-      
-      // Extract final_closing_fee
-      const closingFeeMatch = jsonStr.match(/"final_closing_fee"\s*:\s*"([^"]+)"/);
-      if (closingFeeMatch) result.final_closing_fee = closingFeeMatch[1];
-      
-      // Extract final_trigger_fee
-      const triggerFeeMatch = jsonStr.match(/"final_trigger_fee"\s*:\s*"([^"]+)"/);
-      if (triggerFeeMatch) result.final_trigger_fee = triggerFeeMatch[1];
-      
-      // Extract collateral_sent_to_trader
-      const sentToTraderMatch = jsonStr.match(/"collateral_sent_to_trader"\s*:\s*"([^"]+)"/);
-      if (sentToTraderMatch) result.collateral_sent_to_trader = sentToTraderMatch[1];
-      
-      // Extract available_collateral
-      const availableCollateralMatch = jsonStr.match(/"available_collateral"\s*:\s*"([^"]+)"/);
-      if (availableCollateralMatch) result.available_collateral = availableCollateralMatch[1];
-      
-      // Extract action
-      const actionMatch = jsonStr.match(/"action"\s*:\s*"([^"]+)"/);
-      if (actionMatch) result.action = actionMatch[1];
-      
-      // Extract long
-      const longMatch = jsonStr.match(/"long"\s*:\s*(true|false|"true"|"false")/);
-      if (longMatch) result.long = longMatch[1].replace(/"/g, '');
-      
-      // Extract collateral
-      const collateralMatch = jsonStr.match(/"collateral"\s*:\s*"([^"]+)"/);
-      if (collateralMatch) result.collateral = collateralMatch[1];
-      
-      if (Object.keys(result).length > 0) return result;
-    }
-  } catch (e) {
-    // Ignore parse errors
   }
-  return null;
-}
+`;
 
-// Make JSON-RPC call to Nibiru
-async function rpcCall(rpcUrl: string, method: string, params: any[]): Promise<any> {
-  const response = await fetch(rpcUrl, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      method,
-      params,
-      id: Date.now(),
-    }),
-  });
-  const json = await response.json();
-  if (json.error) {
-    throw new Error(json.error.message || "RPC error");
-  }
-  return json.result;
-}
-
-// Get block timestamp
-async function getBlockTimestamp(rpcUrl: string, blockNumber: string): Promise<string> {
-  try {
-    const block = await rpcCall(rpcUrl, "eth_getBlockByNumber", [blockNumber, false]);
-    if (block && block.timestamp) {
-      const timestamp = parseInt(block.timestamp, 16) * 1000;
-      return new Date(timestamp).toISOString();
-    }
-  } catch {
-    // Ignore errors
-  }
-  return new Date().toISOString();
-}
-
-// Get logs in chunks (max 10000 blocks per request)
-async function getLogsInChunks(rpcUrl: string, fromBlock: number, toBlock: number, address: string, topics: string[]): Promise<any[]> {
-  const allLogs: any[] = [];
-  const chunkSize = 9000; // Stay under 10000 limit
-  
-  for (let start = fromBlock; start <= toBlock; start += chunkSize) {
-    const end = Math.min(start + chunkSize - 1, toBlock);
-    try {
-      const logs = await rpcCall(rpcUrl, "eth_getLogs", [{
-        fromBlock: "0x" + start.toString(16),
-        toBlock: "0x" + end.toString(16),
-        address,
-        topics,
-      }]);
-      if (logs && Array.isArray(logs)) {
-        allLogs.push(...logs);
+// GraphQL query for trade history (for realized P&L on closed trades)
+const TRADE_HISTORY_QUERY = `
+  query GetTradeHistory($trader: String!, $limit: Int, $offset: Int) {
+    perp {
+      tradeHistory(
+        where: { trader: $trader }
+        limit: $limit
+        offset: $offset
+        order_by: sequence
+        order_desc: true
+      ) {
+        id
+        tradeChangeType
+        block {
+          block
+          block_ts
+        }
+        trade {
+          id
+          isLong
+          leverage
+          openPrice
+          closePrice
+          perpBorrowing {
+            baseToken {
+              symbol
+            }
+          }
+        }
+        realizedPnlCollateral
+        realizedPnlPct
       }
-    } catch (error) {
-      console.error(`Error fetching logs for blocks ${start}-${end}:`, error);
     }
   }
-  
-  return allLogs;
+`;
+
+interface GraphQLResponse<T> {
+  data?: T;
+  errors?: Array<{ message: string }>;
 }
 
-interface PaginatedResult {
-  trades: Trade[];
-  pagination: {
-    currentPage: number;
-    hasMore: boolean;
-    fromBlock: number;
-    toBlock: number;
-    latestBlock: number;
+interface PerpTrade {
+  id: number;
+  trader: string;
+  isOpen: boolean;
+  isLong: boolean;
+  tradeType: string;
+  leverage: number;
+  collateralAmount: number;
+  openCollateralAmount: number;
+  openPrice: number;
+  closePrice: number | null;
+  sl: number | null;
+  tp: number | null;
+  perpBorrowing: {
+    marketId: number;
+    baseToken: {
+      symbol: string;
+      name: string;
+    };
+    collateralToken: {
+      symbol: string;
+    };
+  };
+  openBlock: {
+    block: number;
+    block_ts: string;
+  } | null;
+  closeBlock: {
+    block: number;
+    block_ts: string;
+  } | null;
+  state: {
+    pnlCollateral: number;
+    pnlPct: number;
+    pnlCollateralAfterFees: number;
+    positionValue: number;
+    liquidationPrice: number;
+    borrowingFeeCollateral: number;
+    borrowingFeePct: number;
+    closingFeeCollateral: number;
+    closingFeePct: number;
+    remainingCollateralAfterFees: number;
+  } | null;
+}
+
+interface TradeHistoryItem {
+  id: number;
+  tradeChangeType: string;
+  block: {
+    block: number;
+    block_ts: string;
+  };
+  trade: {
+    id: number;
+    isLong: boolean;
+    leverage: number;
+    openPrice: number;
+    closePrice: number | null;
+    perpBorrowing: {
+      baseToken: {
+        symbol: string;
+      };
+    };
+  };
+  realizedPnlCollateral: number | null;
+  realizedPnlPct: number | null;
+}
+
+interface TradesQueryResult {
+  perp: {
+    trades: PerpTrade[];
   };
 }
 
-const BLOCKS_PER_PAGE = 9000;
+interface TradeHistoryQueryResult {
+  perp: {
+    tradeHistory: TradeHistoryItem[];
+  };
+}
 
-// Get transaction count and recent transactions
-async function getAddressTransactions(rpcUrl: string, address: string, page: number = 0): Promise<PaginatedResult> {
-  const trades: Trade[] = [];
-  const lowerAddress = address.toLowerCase();
+async function graphqlQuery<T>(endpoint: string, query: string, variables: Record<string, any>): Promise<T> {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ query, variables }),
+  });
   
-  try {
-    // Get the latest block number
-    const latestBlock = await rpcCall(rpcUrl, "eth_blockNumber", []);
-    const latestBlockNum = parseInt(latestBlock, 16);
-    
-    // Calculate block range for this page (page 0 = most recent blocks)
-    const toBlock = latestBlockNum - (page * BLOCKS_PER_PAGE);
-    const fromBlock = Math.max(0, toBlock - BLOCKS_PER_PAGE + 1);
-    
-    // Check if there are more blocks to scan
-    const hasMore = fromBlock > 0;
-    
-    // Get logs from WASM precompile with the Sai Perps event topic (single chunk since we're only doing 9000 blocks)
-    const logs = await getLogsInChunks(rpcUrl, fromBlock, toBlock, WASM_PRECOMPILE, [WASM_EVENT_TOPIC]);
-
-
-    // First pass: identify transactions that contain our address
-    const matchingTxHashes = new Set<string>();
-    const txBlockMap = new Map<string, string>();
-    const addressSuffix = lowerAddress.slice(2); // Remove 0x prefix
-
-    for (const log of logs) {
-      const eventData = parseEventData(log.data);
-      if (!eventData) continue;
-      
-      // Check if this event contains our EVM address
-      const dataStr = JSON.stringify(eventData).toLowerCase();
-      
-      // Check for EVM address in various forms
-      if (dataStr.includes(addressSuffix) || dataStr.includes(lowerAddress)) {
-        matchingTxHashes.add(log.transactionHash);
-        txBlockMap.set(log.transactionHash, log.blockNumber);
-      }
-    }
-
-
-    // Second pass: get ALL logs from each matching transaction by fetching receipt
-    const txLogsMap = new Map<string, any[]>();
-    for (const txHash of matchingTxHashes) {
-      try {
-        const receipt = await rpcCall(rpcUrl, "eth_getTransactionReceipt", [txHash]);
-        if (receipt && receipt.logs) {
-          const parsedLogs: any[] = [];
-          for (const log of receipt.logs) {
-            const eventData = parseEventData(log.data);
-            if (eventData) {
-              parsedLogs.push({ ...log, parsedData: eventData });
-            }
-          }
-          txLogsMap.set(txHash, parsedLogs);
-        }
-      } catch (err) {
-        console.error(`Error fetching receipt for ${txHash}:`, err);
-      }
-    }
-
-    // Process each transaction
-    for (const [txHash, txLogs] of txLogsMap) {
-      const blockNumber = txBlockMap.get(txHash)!;
-      const timestamp = await getBlockTimestamp(rpcUrl, blockNumber);
-      
-      let trade: Trade = {
-        txHash,
-        timestamp,
-        type: "close",
-      };
-
-      // Parse logs to extract trade info
-      for (const log of txLogs) {
-        const eventData = log.parsedData;
-        if (!eventData) continue;
-
-        const eventType = (eventData.eventType || "").toLowerCase();
-
-        // Open trade event
-        if (eventType.includes("register_trade") || eventType.includes("open_trade") || eventType.includes("trigger_trade/register_trade")) {
-          trade.type = "open";
-          if (eventData.open_price) {
-            trade.openPrice = parseFloat(eventData.open_price);
-          }
-          if (eventData.long !== undefined) {
-            trade.direction = eventData.long === "true" || eventData.long === true ? "long" : "short";
-          }
-          if (eventData.leverage) {
-            trade.leverage = parseFloat(eventData.leverage);
-          }
-          if (eventData.collateral || eventData.position_size_collateral) {
-            trade.collateral = parseFloat(eventData.collateral || eventData.position_size_collateral);
-          }
-          if (eventData.user_trade_index || eventData.trade_index) {
-            const idx = eventData.user_trade_index || eventData.trade_index;
-            trade.tradeIndex = typeof idx === "string" ? idx : JSON.stringify(idx);
-          }
-        }
-
-        // Close trade event - user_close_order
-        if (eventType.includes("close_order") || eventType.includes("user_close")) {
-          trade.type = "close";
-          if (eventData.close_price) {
-            trade.closePrice = parseFloat(eventData.close_price);
-          }
-          if (eventData.profit_pct !== undefined) {
-            trade.profitPct = parseFloat(eventData.profit_pct);
-          }
-          if (eventData.global_trade_index) {
-            try {
-              const indexData = typeof eventData.global_trade_index === "string" 
-                ? JSON.parse(eventData.global_trade_index.replace(/'/g, '"'))
-                : eventData.global_trade_index;
-              trade.tradeIndex = indexData.user_trade_index || String(indexData);
-            } catch {
-              trade.tradeIndex = String(eventData.global_trade_index);
-            }
-          }
-        }
-        
-        // user_close_order event - contains the accurate profit_pct
-        if (eventType.includes("user_close_order")) {
-          trade.type = "close";
-          if (eventData.close_price) {
-            trade.closePrice = parseFloat(eventData.close_price);
-          }
-          // This is the actual trade profit/loss percentage before fees
-          if (eventData.profit_pct !== undefined) {
-            trade.profitPct = parseFloat(eventData.profit_pct);
-          }
-        }
-        
-        // Market close order (fallback)
-        if (eventType.includes("pending_order_type") && eventData.pending_order_type === "market_close") {
-          trade.type = "close";
-          if (eventData.close_price && !trade.closePrice) {
-            trade.closePrice = parseFloat(eventData.close_price);
-          }
-          if (eventData.profit_pct !== undefined && trade.profitPct === undefined) {
-            trade.profitPct = parseFloat(eventData.profit_pct);
-          }
-        }
-
-        // Handle trade PNL - this is the key event for close trades
-        if (eventType.includes("handle_trade_pnl")) {
-          if (eventData.collateral_sent_to_trader) {
-            trade.pnlAmount = parseFloat(eventData.collateral_sent_to_trader);
-          }
-          // available_collateral is the collateral left after the trade P&L calculation but before fees
-          if (eventData.available_collateral && !trade.collateral) {
-            trade.collateral = parseFloat(eventData.available_collateral);
-          }
-          if (eventData.action === "SendToTrader") {
-            trade.type = "close";
-          }
-        }
-        
-        // Handle trade borrowing - extract direction
-        if (eventType.includes("handle_trade_borrowing")) {
-          if (eventData.long !== undefined) {
-            trade.direction = eventData.long === "true" || eventData.long === true ? "long" : "short";
-          }
-        }
-
-        // Process closing fees - get the original collateral amount
-        if (eventType.includes("process_closing_fees")) {
-          trade.type = "close";
-          // Calculate total fees
-          const closingFee = eventData.final_closing_fee ? parseFloat(eventData.final_closing_fee) : 0;
-          const triggerFee = eventData.final_trigger_fee ? parseFloat(eventData.final_trigger_fee) : 0;
-          trade.fees = closingFee + triggerFee;
-          
-          // collateral_left is after closing fees are taken
-          if (eventData.collateral_left) {
-            const collateralAfterFees = parseFloat(eventData.collateral_left);
-            // Calculate original collateral: what they had before fees were deducted
-            trade.collateral = collateralAfterFees + trade.fees;
-          }
-        }
-
-        // Unregister trade (close)
-        if (eventType.includes("unregister_trade")) {
-          trade.type = "close";
-          if (eventData.trade_value_collateral) {
-            trade.pnlAmount = parseFloat(eventData.trade_value_collateral);
-          }
-          if (eventData.trade_index) {
-            trade.tradeIndex = String(eventData.trade_index);
-          }
-          // Calculate P&L from collateral values
-          if (eventData.collateral_left_in_storage && eventData.trade_value_collateral) {
-            const collateralLeft = parseFloat(eventData.collateral_left_in_storage);
-            const tradeValue = parseFloat(eventData.trade_value_collateral);
-            // Estimate original collateral (before fees)
-            const totalFees = (eventData.vault_closing_fee ? parseFloat(eventData.vault_closing_fee) : 0) +
-                             (eventData.trigger_fee_collateral ? parseFloat(eventData.trigger_fee_collateral) : 0) +
-                             (eventData.gov_fee ? parseFloat(eventData.gov_fee) : 0);
-            const originalCollateral = collateralLeft + totalFees;
-            if (originalCollateral > 0) {
-              trade.profitPct = (tradeValue - originalCollateral) / originalCollateral;
-            }
-          }
-        }
-        
-        // Update OI events for direction
-        if (eventType.includes("update_pair_oi") || eventType.includes("update_group_oi")) {
-          if (eventData.long !== undefined && eventData.open === "false") {
-            // This is a close event, use the direction
-            trade.direction = eventData.long === "true" || eventData.long === true ? "long" : "short";
-          }
-        }
-      }
-
-      // Calculate P&L if not already set from user_close_order event
-      // Only fall back to proxy calculation if we don't have actual profit_pct
-      if (trade.type === "close" && trade.profitPct === undefined && trade.pnlAmount && trade.collateral && trade.collateral > 0) {
-        // Fallback proxy: (what they received - original collateral) / original collateral
-        // Note: This is a rough estimate, not actual trade P&L
-        trade.profitPct = (trade.pnlAmount - trade.collateral) / trade.collateral;
-      }
-
-      trades.push(trade);
-    }
-
-    // Sort by timestamp descending
-    trades.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    
-    return {
-      trades,
-      pagination: {
-        currentPage: page,
-        hasMore,
-        fromBlock,
-        toBlock,
-        latestBlock: latestBlockNum,
-      },
-    };
-  } catch (error) {
-    console.error("Error fetching transactions:", error);
-    // Return empty result with pagination on error
-    return {
-      trades: [],
-      pagination: {
-        currentPage: page,
-        hasMore: false,
-        fromBlock: 0,
-        toBlock: 0,
-        latestBlock: 0,
-      },
-    };
+  const result: GraphQLResponse<T> = await response.json();
+  
+  if (result.errors && result.errors.length > 0) {
+    throw new Error(result.errors.map(e => e.message).join(", "));
   }
+  
+  if (!result.data) {
+    throw new Error("No data returned from GraphQL query");
+  }
+  
+  return result.data;
+}
+
+// Convert GraphQL trade data to our Trade type
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>): Trade {
+  const isOpen = perpTrade.isOpen;
+  const timestamp = isOpen 
+    ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
+    : (perpTrade.closeBlock?.block_ts || perpTrade.openBlock?.block_ts || new Date().toISOString());
+  
+  const trade: Trade = {
+    txHash: `trade-${perpTrade.id}`,
+    timestamp,
+    type: isOpen ? "open" : "close",
+    pair: perpTrade.perpBorrowing?.baseToken?.symbol || "Unknown",
+    direction: perpTrade.isLong ? "long" : "short",
+    leverage: perpTrade.leverage,
+    collateral: perpTrade.openCollateralAmount / 1e6,
+    openPrice: perpTrade.openPrice,
+    tradeIndex: String(perpTrade.id),
+  };
+  
+  if (!isOpen) {
+    trade.closePrice = perpTrade.closePrice || undefined;
+    // First try to get P&L from state (for open trades with unrealized P&L)
+    if (perpTrade.state) {
+      trade.profitPct = perpTrade.state.pnlPct;
+      trade.pnlAmount = perpTrade.state.pnlCollateralAfterFees / 1e6;
+      trade.fees = (perpTrade.state.borrowingFeeCollateral + perpTrade.state.closingFeeCollateral) / 1e6;
+    } else {
+      // For closed trades, get realized P&L from trade history map
+      const pnlData = pnlMap.get(perpTrade.id);
+      if (pnlData) {
+        trade.profitPct = pnlData.pnlPct;
+        trade.pnlAmount = pnlData.pnlAmount;
+      }
+    }
+  }
+  
+  return trade;
+}
+
+// Convert trade history item to our Trade type (for closed trades with realized P&L)
+function convertTradeHistoryItem(item: TradeHistoryItem): Trade | null {
+  // Only process close events
+  const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
+  if (!closeTypes.includes(item.tradeChangeType)) {
+    return null;
+  }
+  
+  const trade: Trade = {
+    txHash: `history-${item.id}`,
+    timestamp: item.block.block_ts,
+    type: "close",
+    pair: item.trade.perpBorrowing?.baseToken?.symbol || "Unknown",
+    direction: item.trade.isLong ? "long" : "short",
+    leverage: item.trade.leverage,
+    openPrice: item.trade.openPrice,
+    closePrice: item.trade.closePrice || undefined,
+    tradeIndex: String(item.trade.id),
+  };
+  
+  if (item.realizedPnlPct !== null) {
+    trade.profitPct = item.realizedPnlPct;
+  }
+  if (item.realizedPnlCollateral !== null) {
+    trade.pnlAmount = item.realizedPnlCollateral / 1e6;
+  }
+  
+  return trade;
 }
 
 export async function registerRoutes(
@@ -489,18 +301,18 @@ export async function registerRoutes(
   app: Express
 ): Promise<Server> {
   
-  // Get trades for an address
   app.get("/api/trades", async (req, res) => {
     const address = req.query.address as string;
     const network = (req.query.network as string) || "mainnet";
-    const page = parseInt(req.query.page as string) || 0;
+    const limit = parseInt(req.query.limit as string) || 100;
+    const offset = parseInt(req.query.offset as string) || 0;
     
     if (!address) {
       return res.status(400).json({ error: "Address is required" });
     }
 
-    // Validate address format
-    if (!/^0x[a-fA-F0-9]{40}$/.test(address)) {
+    // Validate address format (0x EVM address)
+    if (!/^0x[a-fA-F0-9]{40}$/i.test(address)) {
       return res.status(400).json({ error: "Invalid EVM address format" });
     }
 
@@ -509,30 +321,77 @@ export async function registerRoutes(
       return res.status(400).json({ error: "Invalid network. Use 'mainnet' or 'testnet'" });
     }
 
-    // Validate page
-    if (page < 0) {
-      return res.status(400).json({ error: "Invalid page number" });
-    }
-
     const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
+    
+    // Convert EVM address to Nibiru bech32 format
+    const nibiAddress = evmToBech32(address);
+    console.log(`Converting ${address} to ${nibiAddress}`);
 
     try {
-      const result = await getAddressTransactions(networkConfig.rpc, address, page);
+      // Fetch trades from Sai Keeper GraphQL API
+      const [tradesResult, historyResult] = await Promise.all([
+        graphqlQuery<TradesQueryResult>(networkConfig.graphql, TRADES_QUERY, {
+          trader: nibiAddress,
+          limit,
+          offset,
+        }),
+        graphqlQuery<TradeHistoryQueryResult>(networkConfig.graphql, TRADE_HISTORY_QUERY, {
+          trader: nibiAddress,
+          limit: limit * 2,
+          offset,
+        }),
+      ]);
       
-      // Calculate stats
-      const closeTrades = result.trades.filter(t => t.type === "close" && t.profitPct !== undefined);
+      // Build a map of trade ID to realized P&L from trade history
+      const pnlMap = new Map<number, { pnlPct: number; pnlAmount: number }>();
+      const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
+      for (const historyItem of historyResult.perp.tradeHistory) {
+        if (closeTypes.includes(historyItem.tradeChangeType) && historyItem.realizedPnlPct !== null) {
+          pnlMap.set(historyItem.trade.id, {
+            pnlPct: historyItem.realizedPnlPct,
+            pnlAmount: (historyItem.realizedPnlCollateral || 0) / 1e6,
+          });
+        }
+      }
+      
+      // Convert trades
+      const trades: Trade[] = [];
+      const seenTradeIds = new Set<number>();
+      
+      // First, add trades from the trades query (includes open positions)
+      for (const perpTrade of tradesResult.perp.trades) {
+        const trade = convertTrade(perpTrade, pnlMap);
+        trades.push(trade);
+        seenTradeIds.add(perpTrade.id);
+      }
+      
+      // Add closed trades from history that might not be in the trades list
+      for (const historyItem of historyResult.perp.tradeHistory) {
+        if (!seenTradeIds.has(historyItem.trade.id)) {
+          const trade = convertTradeHistoryItem(historyItem);
+          if (trade) {
+            trades.push(trade);
+            seenTradeIds.add(historyItem.trade.id);
+          }
+        }
+      }
+      
+      // Sort by timestamp descending
+      trades.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+      
+      // Calculate stats for closed trades only
+      const closeTrades = trades.filter(t => t.type === "close" && t.profitPct !== undefined);
       const wins = closeTrades.filter(t => (t.profitPct ?? 0) > 0).length;
       const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
       const totalPnl = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
 
       const response: TradesResponse = {
         address,
-        trades: result.trades,
+        trades,
         totalPnl,
         winRate,
-        totalTrades: result.trades.length,
+        totalTrades: trades.length,
         explorer: networkConfig.explorer,
-        pagination: result.pagination,
       };
 
       res.json(response);

@@ -1,9 +1,9 @@
-import { useState, useCallback } from "react";
+import { useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, ExternalLink, Loader2, Wallet, ChevronDown, History } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,7 +62,7 @@ function StatsCard({
   );
 }
 
-function TradesTable({ trades, loading, explorerUrl }: { trades: Trade[]; loading: boolean; explorerUrl: string }) {
+function TradesTable({ trades, loading }: { trades: Trade[]; loading: boolean }) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -89,14 +89,14 @@ function TradesTable({ trades, loading, explorerUrl }: { trades: Trade[]; loadin
         <TableHeader>
           <TableRow>
             <TableHead>Type</TableHead>
+            <TableHead>Pair</TableHead>
             <TableHead>Direction</TableHead>
-            <TableHead>Trade Index</TableHead>
+            <TableHead className="text-right">Leverage</TableHead>
             <TableHead className="text-right">Price</TableHead>
             <TableHead className="text-right">P&L %</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
             <TableHead className="text-right">Fees</TableHead>
             <TableHead>Time</TableHead>
-            <TableHead className="w-10"></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -109,6 +109,9 @@ function TradesTable({ trades, loading, explorerUrl }: { trades: Trade[]; loadin
                 >
                   {trade.type === "open" ? "Open" : "Close"}
                 </Badge>
+              </TableCell>
+              <TableCell className="font-medium">
+                {trade.pair || "-"}
               </TableCell>
               <TableCell>
                 {trade.direction && (
@@ -128,8 +131,8 @@ function TradesTable({ trades, loading, explorerUrl }: { trades: Trade[]; loadin
                   </Badge>
                 )}
               </TableCell>
-              <TableCell className="font-mono text-sm text-muted-foreground">
-                {trade.tradeIndex || "-"}
+              <TableCell className="text-right font-mono text-sm">
+                {trade.leverage ? `${trade.leverage}x` : "-"}
               </TableCell>
               <TableCell className="text-right font-mono">
                 {trade.type === "open" && trade.openPrice 
@@ -151,10 +154,10 @@ function TradesTable({ trades, loading, explorerUrl }: { trades: Trade[]; loadin
                 )}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
-                {trade.collateral ? `$${(trade.collateral / 1e6).toFixed(2)}` : "-"}
+                {trade.collateral ? `$${trade.collateral.toFixed(2)}` : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {trade.fees ? `$${(trade.fees / 1e6).toFixed(4)}` : "-"}
+                {trade.fees ? `$${trade.fees.toFixed(4)}` : "-"}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {new Date(trade.timestamp).toLocaleString(undefined, {
@@ -163,17 +166,6 @@ function TradesTable({ trades, loading, explorerUrl }: { trades: Trade[]; loadin
                   hour: "2-digit",
                   minute: "2-digit",
                 })}
-              </TableCell>
-              <TableCell>
-                <a
-                  href={`${explorerUrl}/tx/${trade.txHash}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-muted-foreground hover:text-primary transition-colors"
-                  data-testid={`link-tx-${trade.txHash.slice(0, 8)}`}
-                >
-                  <ExternalLink className="h-4 w-4" />
-                </a>
               </TableCell>
             </TableRow>
           ))}
@@ -193,10 +185,6 @@ const NETWORK_CONFIG = {
 export default function Home() {
   const [searchAddress, setSearchAddress] = useState<string | null>(null);
   const [network, setNetwork] = useState<Network>("mainnet");
-  const [currentPage, setCurrentPage] = useState(0);
-  const [accumulatedTrades, setAccumulatedTrades] = useState<Trade[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -206,54 +194,27 @@ export default function Home() {
   });
 
   const { data, isLoading, error } = useQuery<TradesResponse>({
-    queryKey: ["/api/trades", searchAddress, network, currentPage],
+    queryKey: ["/api/trades", searchAddress, network],
     queryFn: async () => {
-      const res = await fetch(`/api/trades?address=${searchAddress}&network=${network}&page=${currentPage}`);
+      const res = await fetch(`/api/trades?address=${searchAddress}&network=${network}&limit=500`);
       if (!res.ok) throw new Error("Failed to fetch trades");
-      const result = await res.json();
-      
-      // On first page, replace trades; on subsequent pages, append
-      if (currentPage === 0) {
-        setAccumulatedTrades(result.trades);
-      } else {
-        setAccumulatedTrades(prev => [...prev, ...result.trades]);
-      }
-      
-      setHasMore(result.pagination?.hasMore ?? false);
-      setIsLoadingMore(false);
-      
-      return result;
+      return res.json();
     },
     enabled: !!searchAddress,
   });
 
-  const explorerUrl = data?.explorer || NETWORK_CONFIG[network].explorer;
+  const trades = data?.trades || [];
 
   const onSubmit = (values: AddressForm) => {
-    // Reset pagination when searching new address
-    setCurrentPage(0);
-    setAccumulatedTrades([]);
-    setHasMore(false);
     setSearchAddress(values.address);
   };
 
-  const handleLoadMore = useCallback(() => {
-    if (hasMore && !isLoadingMore) {
-      setIsLoadingMore(true);
-      setCurrentPage(prev => prev + 1);
-    }
-  }, [hasMore, isLoadingMore]);
-
-  // Function to change network and reset pagination
   const handleNetworkChange = (newNetwork: Network) => {
     setNetwork(newNetwork);
-    setCurrentPage(0);
-    setAccumulatedTrades([]);
-    setHasMore(false);
   };
 
-  // Calculate stats from accumulated trades
-  const closeTrades = accumulatedTrades.filter(t => t.type === "close" && t.profitPct !== undefined);
+  // Calculate stats from trades
+  const closeTrades = trades.filter(t => t.type === "close" && t.profitPct !== undefined);
   const wins = closeTrades.filter(t => (t.profitPct ?? 0) > 0).length;
   const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
   const totalPnl = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
@@ -367,24 +328,24 @@ export default function Home() {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <StatsCard
                 title="Total P&L"
-                value={accumulatedTrades.length > 0 ? `${totalPnl >= 0 ? "+" : ""}${(totalPnl * 100).toFixed(2)}%` : "-"}
+                value={trades.length > 0 ? `${totalPnl >= 0 ? "+" : ""}${(totalPnl * 100).toFixed(2)}%` : "-"}
                 icon={totalPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
-                loading={isLoading && currentPage === 0}
+                loading={isLoading}
               />
               <StatsCard
                 title="Win Rate"
-                value={accumulatedTrades.length > 0 ? `${(winRate * 100).toFixed(1)}%` : "-"}
+                value={trades.length > 0 ? `${(winRate * 100).toFixed(1)}%` : "-"}
                 icon={Activity}
                 trend={winRate >= 0.5 ? "up" : "neutral"}
-                loading={isLoading && currentPage === 0}
+                loading={isLoading}
               />
               <StatsCard
                 title="Total Trades"
-                value={accumulatedTrades.length > 0 ? accumulatedTrades.length.toString() : "-"}
+                value={trades.length > 0 ? trades.length.toString() : "-"}
                 icon={Activity}
                 trend="neutral"
-                loading={isLoading && currentPage === 0}
+                loading={isLoading}
               />
             </div>
 
@@ -401,32 +362,7 @@ export default function Home() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <TradesTable trades={accumulatedTrades} loading={isLoading && currentPage === 0} explorerUrl={explorerUrl} />
-                
-                {/* Load More Button */}
-                {hasMore && !isLoading && (
-                  <div className="mt-6 flex justify-center">
-                    <Button
-                      variant="outline"
-                      onClick={handleLoadMore}
-                      disabled={isLoadingMore}
-                      data-testid="button-load-more"
-                      className="gap-2"
-                    >
-                      {isLoadingMore ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          Loading...
-                        </>
-                      ) : (
-                        <>
-                          <History className="h-4 w-4" />
-                          Load More History
-                        </>
-                      )}
-                    </Button>
-                  </div>
-                )}
+                <TradesTable trades={trades} loading={isLoading} />
               </CardContent>
             </Card>
           </>
@@ -449,7 +385,7 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-border/50 mt-auto">
         <div className="container mx-auto px-4 py-6 text-center text-sm text-muted-foreground">
-          <p>Data sourced from Nibiru via nibiscan.io</p>
+          <p>Data sourced from Sai Keeper API</p>
         </div>
       </footer>
     </div>
