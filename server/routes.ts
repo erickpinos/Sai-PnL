@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import type { Trade, TradesResponse, OpenPosition, OpenPositionsResponse, GlobalStats, GlobalStatsResponse } from "@shared/schema";
+import type { Trade, TradesResponse, OpenPosition, OpenPositionsResponse, GlobalStats, GlobalStatsResponse, VaultPosition, VaultPositionsResponse } from "@shared/schema";
 import { bech32 } from "bech32";
 
 // Network configurations for Sai Keeper GraphQL API and EVM RPC
@@ -117,6 +117,45 @@ const GLOBAL_STATS_QUERY = `
           symbol
         }
         priceUsd
+      }
+    }
+  }
+`;
+
+// GraphQL query for user vault deposit history
+const VAULT_POSITIONS_QUERY = `
+  query GetVaultPositions($depositor: String!) {
+    lp {
+      depositHistory(
+        where: { depositor: $depositor }
+        limit: 100
+      ) {
+        id
+        action
+        depositor
+        amount
+        shares
+        collateralPrice
+        block {
+          block
+          block_ts
+        }
+        txHash
+        evmTxHash
+        vault {
+          availableAssets
+          apy
+          collateralToken {
+            symbol
+          }
+        }
+      }
+      vaults {
+        availableAssets
+        apy
+        collateralToken {
+          symbol
+        }
       }
     }
   }
@@ -816,6 +855,174 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching global stats:", error);
       res.status(500).json({ error: "Failed to fetch global stats" });
+    }
+  });
+
+  // Get vault positions for a specific address
+  app.get("/api/vault-positions", async (req, res) => {
+    try {
+      const { address, network: networkParam } = req.query;
+      
+      if (!address || typeof address !== "string") {
+        return res.status(400).json({ error: "Address is required" });
+      }
+
+      const network = (networkParam as string) || "mainnet";
+      const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
+      
+      if (!networkConfig) {
+        return res.status(400).json({ error: "Invalid network" });
+      }
+
+      // Convert EVM address to bech32 if needed
+      let nibiAddress = address;
+      if (address.startsWith("0x")) {
+        nibiAddress = evmToBech32(address);
+      }
+
+      // Fetch vault positions from GraphQL
+      const response = await fetch(networkConfig.graphql, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: VAULT_POSITIONS_QUERY,
+          variables: { depositor: nibiAddress },
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.errors) {
+        console.error("GraphQL errors:", data.errors);
+        return res.status(500).json({ error: "Failed to fetch vault positions" });
+      }
+
+      const depositHistory = data.data?.lp?.depositHistory || [];
+      const vaults = data.data?.lp?.vaults || [];
+
+      // Create a map of current vault data (for calculating current share value)
+      const vaultMap = new Map<string, { availableAssets: number; apy: number; totalShares?: number }>();
+      vaults.forEach((vault: any) => {
+        const symbol = vault.collateralToken?.symbol || "Unknown";
+        vaultMap.set(symbol, {
+          availableAssets: parseFloat(vault.availableAssets) || 0,
+          apy: parseFloat(vault.apy) || 0,
+        });
+      });
+
+      // Process deposit history to calculate positions
+      // Group deposits by vault symbol and aggregate
+      const positionsByVault = new Map<string, {
+        deposits: any[];
+        totalShares: number;
+        totalDeposited: number;
+      }>();
+
+      depositHistory.forEach((deposit: any) => {
+        const symbol = deposit.vault?.collateralToken?.symbol || "Unknown";
+        const action = deposit.action;
+        const amount = parseFloat(deposit.amount) / 1e6; // Convert from micro-units
+        const shares = parseFloat(deposit.shares) / 1e6;
+
+        if (!positionsByVault.has(symbol)) {
+          positionsByVault.set(symbol, { deposits: [], totalShares: 0, totalDeposited: 0 });
+        }
+
+        const position = positionsByVault.get(symbol)!;
+        position.deposits.push(deposit);
+
+        if (action === "deposit") {
+          position.totalShares += shares;
+          position.totalDeposited += amount;
+        } else if (action === "withdraw") {
+          position.totalShares -= shares;
+          position.totalDeposited -= amount;
+        }
+      });
+
+      // Convert to vault positions array with earnings calculation
+      const positions: VaultPosition[] = [];
+
+      positionsByVault.forEach((data, symbol) => {
+        // Only include positions with positive shares
+        if (data.totalShares <= 0) return;
+
+        // Get the most recent deposit for this vault
+        const latestDeposit = data.deposits[0];
+        const vaultData = vaultMap.get(symbol);
+        
+        // Calculate current value based on share price
+        // Share price = availableAssets / totalShares (simplified)
+        // For now, use the deposited value as a baseline since we don't have total shares
+        const currentApy = vaultData?.apy || latestDeposit?.vault?.apy || 0;
+        
+        // Estimate current value based on time elapsed and APY
+        const depositDate = latestDeposit?.block?.block_ts ? new Date(latestDeposit.block.block_ts) : new Date();
+        const now = new Date();
+        const daysElapsed = (now.getTime() - depositDate.getTime()) / (1000 * 60 * 60 * 24);
+        const yearsElapsed = daysElapsed / 365;
+        
+        // Simple APY calculation for estimated current value
+        const estimatedGrowth = data.totalDeposited * currentApy * yearsElapsed;
+        const currentValue = data.totalDeposited + estimatedGrowth;
+        const earnings = currentValue - data.totalDeposited;
+        const earningsPercent = data.totalDeposited > 0 ? (earnings / data.totalDeposited) * 100 : 0;
+
+        // Create individual position entries for each deposit
+        data.deposits
+          .filter((d: any) => d.action === "deposit")
+          .forEach((deposit: any) => {
+            const depositAmount = parseFloat(deposit.amount) / 1e6;
+            const depositShares = parseFloat(deposit.shares) / 1e6;
+            const depositDate = deposit.block?.block_ts || "";
+            const depositDaysElapsed = depositDate ? (now.getTime() - new Date(depositDate).getTime()) / (1000 * 60 * 60 * 24) : 0;
+            const depositYearsElapsed = depositDaysElapsed / 365;
+            const depositEstimatedGrowth = depositAmount * currentApy * depositYearsElapsed;
+            const depositCurrentValue = depositAmount + depositEstimatedGrowth;
+            const depositEarnings = depositCurrentValue - depositAmount;
+            const depositEarningsPercent = depositAmount > 0 ? (depositEarnings / depositAmount) * 100 : 0;
+
+            positions.push({
+              vaultSymbol: symbol,
+              depositAmount,
+              shares: depositShares,
+              currentValue: depositCurrentValue,
+              earnings: depositEarnings,
+              earningsPercent: depositEarningsPercent,
+              depositDate,
+              txHash: deposit.txHash || "",
+              evmTxHash: deposit.evmTxHash || "",
+              apy: currentApy,
+              collateralPriceAtDeposit: parseFloat(deposit.collateralPrice) || 0,
+            });
+          });
+      });
+
+      // Sort by deposit date (most recent first), handle invalid dates
+      positions.sort((a, b) => {
+        const dateA = a.depositDate ? new Date(a.depositDate).getTime() : 0;
+        const dateB = b.depositDate ? new Date(b.depositDate).getTime() : 0;
+        return dateB - dateA;
+      });
+
+      // Calculate totals
+      const totalDeposited = positions.reduce((sum, p) => sum + p.depositAmount, 0);
+      const totalCurrentValue = positions.reduce((sum, p) => sum + p.currentValue, 0);
+      const totalEarnings = positions.reduce((sum, p) => sum + p.earnings, 0);
+
+      const vaultPositionsResponse: VaultPositionsResponse = {
+        address,
+        positions,
+        totalDeposited,
+        totalCurrentValue,
+        totalEarnings,
+        network,
+      };
+
+      res.json(vaultPositionsResponse);
+    } catch (error) {
+      console.error("Error fetching vault positions:", error);
+      res.status(500).json({ error: "Failed to fetch vault positions" });
     }
   });
 

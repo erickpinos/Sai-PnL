@@ -96,3 +96,26 @@ export interface GlobalStatsResponse {
   stats: GlobalStats;
   network: string;
 }
+
+export interface VaultPosition {
+  vaultSymbol: string;
+  depositAmount: number;
+  shares: number;
+  currentValue: number;
+  earnings: number;
+  earningsPercent: number;
+  depositDate: string;
+  txHash: string;
+  evmTxHash: string;
+  apy: number;
+  collateralPriceAtDeposit: number;
+}
+
+export interface VaultPositionsResponse {
+  address: string;
+  positions: VaultPosition[];
+  totalDeposited: number;
+  totalCurrentValue: number;
+  totalEarnings: number;
+  network: string;
+}

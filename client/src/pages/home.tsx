@@ -23,7 +23,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { TradesResponse, Trade, OpenPositionsResponse, OpenPosition, GlobalStatsResponse } from "@shared/schema";
+import type { TradesResponse, Trade, OpenPositionsResponse, OpenPosition, GlobalStatsResponse, VaultPositionsResponse, VaultPosition } from "@shared/schema";
 
 const addressSchema = z.object({
   address: z.string()
@@ -385,7 +385,7 @@ export default function Home() {
   const [network, setNetwork] = useState<Network>("mainnet");
   const [pnlDisplayMode, setPnlDisplayMode] = useState<PnlDisplayMode>("percent");
   const [showAfterFees, setShowAfterFees] = useState(false);
-  const [activeTab, setActiveTab] = useState<"trades" | "positions" | "stats">("trades");
+  const [activeTab, setActiveTab] = useState<"trades" | "positions" | "vaults" | "stats">("trades");
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
   
@@ -446,6 +446,16 @@ export default function Home() {
     queryFn: async () => {
       const res = await fetch(`/api/positions?address=${searchAddress}&network=${network}`);
       if (!res.ok) throw new Error("Failed to fetch positions");
+      return res.json();
+    },
+    enabled: !!searchAddress,
+  });
+
+  const { data: vaultPositionsData, isLoading: vaultPositionsLoading } = useQuery<VaultPositionsResponse>({
+    queryKey: ["/api/vault-positions", searchAddress, network],
+    queryFn: async () => {
+      const res = await fetch(`/api/vault-positions?address=${searchAddress}&network=${network}`);
+      if (!res.ok) throw new Error("Failed to fetch vault positions");
       return res.json();
     },
     enabled: !!searchAddress,
@@ -675,13 +685,16 @@ export default function Home() {
             </div>
 
             {/* Tabs for Trades, Positions, and Stats */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "trades" | "positions" | "stats")} className="w-full">
-              <TabsList className="grid w-full max-w-lg grid-cols-3">
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "trades" | "positions" | "vaults" | "stats")} className="w-full">
+              <TabsList className="grid w-full max-w-2xl grid-cols-4">
                 <TabsTrigger value="trades" data-testid="tab-trades">
                   Trade History {trades.length > 0 && `(${trades.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="positions" data-testid="tab-positions">
                   Open Positions {positions.length > 0 && `(${positions.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="vaults" data-testid="tab-vaults">
+                  My Vaults {vaultPositionsData?.positions && vaultPositionsData.positions.length > 0 && `(${vaultPositionsData.positions.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="stats" data-testid="tab-stats">
                   Stats
@@ -724,6 +737,147 @@ export default function Home() {
                   </CardHeader>
                   <CardContent>
                     <OpenPositionsTable positions={positions} isLoading={positionsLoading} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="vaults" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>My Vault Positions</CardTitle>
+                    <CardDescription>
+                      {vaultPositionsData?.positions && vaultPositionsData.positions.length > 0 
+                        ? `${vaultPositionsData.positions.length} vault deposit${vaultPositionsData.positions.length > 1 ? "s" : ""}`
+                        : "No vault deposits found"
+                      }
+                      {vaultPositionsData?.totalEarnings !== undefined && vaultPositionsData.positions.length > 0 && vaultPositionsData.totalDeposited > 0 && (
+                        <span className={`ml-2 font-mono ${vaultPositionsData.totalEarnings >= 0 ? "text-green-500" : "text-red-500"}`}>
+                          Earnings: {vaultPositionsData.totalEarnings >= 0 ? "+" : ""}{vaultPositionsData.totalEarnings < 1 ? vaultPositionsData.totalEarnings.toFixed(4) : vaultPositionsData.totalEarnings.toFixed(2)} ({((vaultPositionsData.totalEarnings / vaultPositionsData.totalDeposited) * 100).toFixed(2)}%)
+                        </span>
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {vaultPositionsLoading ? (
+                      <div className="space-y-3">
+                        {[...Array(3)].map((_, i) => (
+                          <Skeleton key={i} className="h-16 w-full" />
+                        ))}
+                      </div>
+                    ) : vaultPositionsData?.positions && vaultPositionsData.positions.length > 0 ? (
+                      <div className="overflow-x-auto">
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Vault</TableHead>
+                              <TableHead>Deposited</TableHead>
+                              <TableHead>Shares</TableHead>
+                              <TableHead>Current Value</TableHead>
+                              <TableHead>Earnings</TableHead>
+                              <TableHead>APY</TableHead>
+                              <TableHead>Deposit Date</TableHead>
+                              <TableHead>Tx</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {vaultPositionsData.positions.map((position, index) => (
+                              <TableRow key={`${position.vaultSymbol}-${index}`} data-testid={`vault-row-${index}`}>
+                                <TableCell>
+                                  <Badge variant="outline" className="font-mono">
+                                    SLP-{position.vaultSymbol}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="font-mono">
+                                  {position.depositAmount < 1 
+                                    ? position.depositAmount.toFixed(4) 
+                                    : position.depositAmount.toFixed(2)
+                                  } {position.vaultSymbol}
+                                </TableCell>
+                                <TableCell className="font-mono text-muted-foreground">
+                                  {position.shares < 1 
+                                    ? position.shares.toFixed(4) 
+                                    : position.shares.toFixed(2)
+                                  }
+                                </TableCell>
+                                <TableCell className="font-mono">
+                                  {position.currentValue < 1 
+                                    ? position.currentValue.toFixed(4) 
+                                    : position.currentValue.toFixed(2)
+                                  } {position.vaultSymbol}
+                                </TableCell>
+                                <TableCell>
+                                  <span className={`font-mono ${position.earnings >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                    {position.earnings >= 0 ? "+" : ""}
+                                    {position.earnings < 0.01 && position.earnings > -0.01 
+                                      ? position.earnings.toFixed(6)
+                                      : position.earnings.toFixed(4)
+                                    }
+                                    <span className="text-xs text-muted-foreground ml-1">
+                                      ({position.earningsPercent >= 0 ? "+" : ""}{position.earningsPercent.toFixed(2)}%)
+                                    </span>
+                                  </span>
+                                </TableCell>
+                                <TableCell>
+                                  <span className="font-mono text-primary">
+                                    {(position.apy * 100).toFixed(2)}%
+                                  </span>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-sm">
+                                  {position.depositDate ? new Date(position.depositDate).toLocaleDateString() : "-"}
+                                </TableCell>
+                                <TableCell>
+                                  {position.evmTxHash && (
+                                    <a
+                                      href={`https://nibiscan.io/tx/${position.evmTxHash}`}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="text-primary hover:underline font-mono text-xs"
+                                      data-testid={`vault-tx-link-${index}`}
+                                    >
+                                      {position.evmTxHash.slice(0, 8)}...
+                                    </a>
+                                  )}
+                                </TableCell>
+                              </TableRow>
+                            ))}
+                          </TableBody>
+                        </Table>
+
+                        {/* Totals Summary */}
+                        <div className="mt-4 pt-4 border-t border-border/50">
+                          <div className="grid grid-cols-3 gap-4 text-sm">
+                            <div>
+                              <p className="text-muted-foreground">Total Deposited</p>
+                              <p className="font-mono font-medium">
+                                ${vaultPositionsData.totalDeposited.toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Current Value</p>
+                              <p className="font-mono font-medium">
+                                ${vaultPositionsData.totalCurrentValue.toFixed(2)}
+                              </p>
+                            </div>
+                            <div>
+                              <p className="text-muted-foreground">Total Earnings</p>
+                              <p className={`font-mono font-medium ${vaultPositionsData.totalEarnings >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                {vaultPositionsData.totalEarnings >= 0 ? "+" : ""}${vaultPositionsData.totalEarnings.toFixed(4)}
+                              </p>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="text-center py-8">
+                        <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-muted mb-4">
+                          <Wallet className="h-6 w-6 text-muted-foreground" />
+                        </div>
+                        <p className="text-muted-foreground">No vault deposits found for this address</p>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Deposit into SLP-USDC or SLP-stNIBI vaults to earn yield
+                        </p>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
