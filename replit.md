@@ -1,4 +1,4 @@
-# Sai Perps PnL Tracker
+# Sai Perps Tracker
 
 A web application for tracking profit and loss on Sai Perps trades on Nibiru.
 

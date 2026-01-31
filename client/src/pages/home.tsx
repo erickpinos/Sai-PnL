@@ -669,7 +669,7 @@ export default function Home() {
             <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "trades" | "positions")} className="w-full">
               <TabsList className="grid w-full max-w-md grid-cols-2">
                 <TabsTrigger value="trades" data-testid="tab-trades">
-                  Trade History
+                  Trade History {trades.length > 0 && `(${trades.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="positions" data-testid="tab-positions">
                   Open Positions {positions.length > 0 && `(${positions.length})`}
