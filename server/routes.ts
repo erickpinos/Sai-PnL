@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import type { Trade, TradesResponse } from "@shared/schema";
+import type { Trade, TradesResponse, OpenPosition, OpenPositionsResponse } from "@shared/schema";
 import { bech32 } from "bech32";
 
 // Network configurations for Sai Keeper GraphQL API and EVM RPC
@@ -612,6 +612,82 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching trades:", error);
       res.status(500).json({ error: "Failed to fetch trades" });
+    }
+  });
+
+  // Open positions endpoint
+  app.get("/api/positions", async (req, res) => {
+    try {
+      const address = req.query.address as string;
+      const network = (req.query.network as string) || "mainnet";
+      
+      if (!address) {
+        return res.status(400).json({ error: "Address is required" });
+      }
+
+      const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
+      if (!networkConfig) {
+        return res.status(400).json({ error: "Invalid network" });
+      }
+
+      // Convert EVM address to bech32
+      const bech32Address = evmToBech32(address);
+      console.log(`Fetching open positions for ${address} (${bech32Address}) on ${network}`);
+
+      // Query open trades
+      const tradesResponse = await fetch(networkConfig.graphql, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: TRADES_QUERY,
+          variables: { trader: bech32Address, limit: 100, offset: 0 },
+        }),
+      });
+
+      const tradesData = await tradesResponse.json() as GraphQLResponse<TradesQueryResult>;
+      
+      if (tradesData.errors) {
+        console.error("GraphQL errors:", tradesData.errors);
+        return res.status(500).json({ error: "Failed to fetch positions" });
+      }
+
+      const allTrades = tradesData.data?.perp?.trades || [];
+      const openTrades = allTrades.filter(t => t.isOpen);
+
+      // Convert to OpenPosition format
+      const positions: OpenPosition[] = openTrades.map(trade => ({
+        tradeId: trade.id,
+        pair: trade.perpBorrowing?.baseToken?.symbol || "Unknown",
+        direction: trade.isLong ? "long" : "short",
+        leverage: trade.leverage,
+        collateral: (trade.openCollateralAmount || trade.collateralAmount) / 1e6,
+        entryPrice: trade.openPrice,
+        currentPrice: undefined,
+        stopLoss: trade.sl,
+        takeProfit: trade.tp,
+        liquidationPrice: trade.state?.liquidationPrice,
+        unrealizedPnl: trade.state ? trade.state.pnlCollateral / 1e6 : undefined,
+        unrealizedPnlPct: trade.state?.pnlPct,
+        positionValue: trade.state ? trade.state.positionValue / 1e6 : undefined,
+        borrowingFee: trade.state ? trade.state.borrowingFeeCollateral / 1e6 : undefined,
+        openedAt: trade.openBlock?.block_ts || new Date().toISOString(),
+      }));
+
+      // Calculate total unrealized PnL
+      const totalUnrealizedPnl = positions.reduce((sum, p) => sum + (p.unrealizedPnl ?? 0), 0);
+
+      const response: OpenPositionsResponse = {
+        address,
+        positions,
+        totalPositions: positions.length,
+        totalUnrealizedPnl,
+        explorer: networkConfig.explorer,
+      };
+
+      res.json(response);
+    } catch (error) {
+      console.error("Error fetching positions:", error);
+      res.status(500).json({ error: "Failed to fetch positions" });
     }
   });
 

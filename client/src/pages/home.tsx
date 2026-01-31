@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -12,7 +12,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Form, FormControl, FormField, FormItem, FormMessage } from "@/components/ui/form";
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
-import type { TradesResponse, Trade } from "@shared/schema";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import type { TradesResponse, Trade, OpenPositionsResponse, OpenPosition } from "@shared/schema";
 
 const addressSchema = z.object({
   address: z.string()
@@ -241,6 +242,117 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
   );
 }
 
+function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[]; isLoading: boolean }) {
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[...Array(3)].map((_, i) => (
+          <Skeleton key={i} className="h-12 w-full" />
+        ))}
+      </div>
+    );
+  }
+
+  if (positions.length === 0) {
+    return (
+      <div className="text-center py-8 text-muted-foreground">
+        No open positions found
+      </div>
+    );
+  }
+
+  const formatPrice = (price: number | null | undefined) => {
+    if (price === null || price === undefined) return "-";
+    if (price >= 1000) return `$${price.toLocaleString(undefined, { maximumFractionDigits: 2 })}`;
+    return `$${price.toFixed(4)}`;
+  };
+
+  return (
+    <div className="overflow-x-auto">
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Pair</TableHead>
+            <TableHead>Direction</TableHead>
+            <TableHead className="text-right">Collateral</TableHead>
+            <TableHead className="text-right">Entry Price</TableHead>
+            <TableHead className="text-right">Liq. Price</TableHead>
+            <TableHead className="text-right">
+              <div className="flex items-center justify-end gap-1">
+                <ShieldAlert className="h-3 w-3" />
+                Stop Loss
+              </div>
+            </TableHead>
+            <TableHead className="text-right">
+              <div className="flex items-center justify-end gap-1">
+                <Target className="h-3 w-3" />
+                Take Profit
+              </div>
+            </TableHead>
+            <TableHead className="text-right">Unrealized P&L</TableHead>
+            <TableHead className="text-right">Borrowing Fee</TableHead>
+            <TableHead>Opened</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {positions.map((position) => {
+            const pnlColor = (position.unrealizedPnlPct ?? 0) >= 0 ? "text-green-500" : "text-red-500";
+            
+            return (
+              <TableRow key={position.tradeId} data-testid={`row-position-${position.tradeId}`}>
+                <TableCell className="font-medium">{position.pair}</TableCell>
+                <TableCell>
+                  <Badge variant={position.direction === "long" ? "default" : "secondary"}>
+                    {position.direction.toUpperCase()} {position.leverage}x
+                  </Badge>
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm">
+                  ${position.collateral.toFixed(2)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm">
+                  {formatPrice(position.entryPrice)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm text-orange-500">
+                  {formatPrice(position.liquidationPrice)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm">
+                  {formatPrice(position.stopLoss)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm">
+                  {formatPrice(position.takeProfit)}
+                </TableCell>
+                <TableCell className={`text-right font-mono text-sm ${pnlColor}`}>
+                  {position.unrealizedPnl !== undefined ? (
+                    <>
+                      {position.unrealizedPnl >= 0 ? "+" : "-"}${Math.abs(position.unrealizedPnl).toFixed(2)}
+                      <span className="text-xs ml-1">
+                        ({position.unrealizedPnlPct !== undefined 
+                          ? `${position.unrealizedPnlPct >= 0 ? "+" : ""}${(position.unrealizedPnlPct * 100).toFixed(2)}%` 
+                          : "-"})
+                      </span>
+                    </>
+                  ) : "-"}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm text-muted-foreground">
+                  {position.borrowingFee !== undefined ? `$${position.borrowingFee.toFixed(4)}` : "-"}
+                </TableCell>
+                <TableCell className="text-sm text-muted-foreground">
+                  {new Date(position.openedAt).toLocaleString(undefined, {
+                    month: "short",
+                    day: "numeric",
+                    hour: "2-digit",
+                    minute: "2-digit",
+                  })}
+                </TableCell>
+              </TableRow>
+            );
+          })}
+        </TableBody>
+      </Table>
+    </div>
+  );
+}
+
 type Network = "mainnet" | "testnet";
 
 const NETWORK_CONFIG = {
@@ -253,6 +365,7 @@ export default function Home() {
   const [network, setNetwork] = useState<Network>("mainnet");
   const [pnlDisplayMode, setPnlDisplayMode] = useState<PnlDisplayMode>("percent");
   const [showAfterFees, setShowAfterFees] = useState(false);
+  const [activeTab, setActiveTab] = useState<"trades" | "positions">("trades");
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -271,7 +384,18 @@ export default function Home() {
     enabled: !!searchAddress,
   });
 
+  const { data: positionsData, isLoading: positionsLoading } = useQuery<OpenPositionsResponse>({
+    queryKey: ["/api/positions", searchAddress, network],
+    queryFn: async () => {
+      const res = await fetch(`/api/positions?address=${searchAddress}&network=${network}`);
+      if (!res.ok) throw new Error("Failed to fetch positions");
+      return res.json();
+    },
+    enabled: !!searchAddress,
+  });
+
   const trades = data?.trades || [];
+  const positions = positionsData?.positions || [];
 
   const onSubmit = (values: AddressForm) => {
     setSearchAddress(values.address);
@@ -440,22 +564,57 @@ export default function Home() {
               />
             </div>
 
-            {/* Trades Table */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Trade History</CardTitle>
-                <CardDescription>
-                  {searchAddress && (
-                    <span className="font-mono text-xs">
-                      {searchAddress.slice(0, 6)}...{searchAddress.slice(-4)}
-                    </span>
-                  )}
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <TradesTable trades={trades} loading={isLoading} pnlDisplayMode={pnlDisplayMode} />
-              </CardContent>
-            </Card>
+            {/* Tabs for Trades and Positions */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "trades" | "positions")} className="w-full">
+              <TabsList className="grid w-full max-w-md grid-cols-2">
+                <TabsTrigger value="trades" data-testid="tab-trades">
+                  Trade History
+                </TabsTrigger>
+                <TabsTrigger value="positions" data-testid="tab-positions">
+                  Open Positions {positions.length > 0 && `(${positions.length})`}
+                </TabsTrigger>
+              </TabsList>
+              
+              <TabsContent value="trades" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Trade History</CardTitle>
+                    <CardDescription>
+                      {searchAddress && (
+                        <span className="font-mono text-xs">
+                          {searchAddress.slice(0, 6)}...{searchAddress.slice(-4)}
+                        </span>
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <TradesTable trades={trades} loading={isLoading} pnlDisplayMode={pnlDisplayMode} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+              
+              <TabsContent value="positions" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Open Positions</CardTitle>
+                    <CardDescription>
+                      {positions.length > 0 
+                        ? `${positions.length} active position${positions.length > 1 ? "s" : ""}`
+                        : "No open positions"
+                      }
+                      {positionsData?.totalUnrealizedPnl !== undefined && positions.length > 0 && (
+                        <span className={`ml-2 font-mono ${positionsData.totalUnrealizedPnl >= 0 ? "text-green-500" : "text-red-500"}`}>
+                          Unrealized: {positionsData.totalUnrealizedPnl >= 0 ? "+" : "-"}${Math.abs(positionsData.totalUnrealizedPnl).toFixed(2)}
+                        </span>
+                      )}
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    <OpenPositionsTable positions={positions} isLoading={positionsLoading} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+            </Tabs>
           </>
         )}
 
