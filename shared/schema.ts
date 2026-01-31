@@ -76,3 +76,23 @@ export interface TradesResponse {
     latestBlock: number;
   };
 }
+
+export interface GlobalStats {
+  totalTvl: number;
+  totalOpenInterest: number;
+  totalOpenPositions: number;
+  longOpenInterest: number;
+  shortOpenInterest: number;
+  vaults: {
+    id: string;
+    tvl: number;
+    depositsActive: number;
+    depositsAvailable: number;
+    symbol: string;
+  }[];
+}
+
+export interface GlobalStatsResponse {
+  stats: GlobalStats;
+  network: string;
+}

@@ -1,6 +1,6 @@
 import type { Express } from "express";
 import { createServer, type Server } from "http";
-import type { Trade, TradesResponse, OpenPosition, OpenPositionsResponse } from "@shared/schema";
+import type { Trade, TradesResponse, OpenPosition, OpenPositionsResponse, GlobalStats, GlobalStatsResponse } from "@shared/schema";
 import { bech32 } from "bech32";
 
 // Network configurations for Sai Keeper GraphQL API and EVM RPC
@@ -80,6 +80,34 @@ const TRADES_QUERY = `
           closingFeeCollateral
           closingFeePct
           remainingCollateralAfterFees
+        }
+      }
+    }
+  }
+`;
+
+// GraphQL query for global protocol stats
+const GLOBAL_STATS_QUERY = `
+  query GetGlobalStats {
+    perp {
+      trades(where: { isOpen: true }, limit: 10000) {
+        id
+        isLong
+        collateralAmount
+        leverage
+        state {
+          positionValue
+        }
+      }
+    }
+    lp {
+      vaults {
+        id
+        tvl
+        depositsActive
+        depositsAvailable
+        collateralToken {
+          symbol
         }
       }
     }
@@ -688,6 +716,82 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error fetching positions:", error);
       res.status(500).json({ error: "Failed to fetch positions" });
+    }
+  });
+
+  // Global protocol stats endpoint
+  app.get("/api/stats", async (req, res) => {
+    try {
+      const network = (req.query.network as string) || "mainnet";
+      const networkConfig = NETWORKS[network as keyof typeof NETWORKS];
+      
+      if (!networkConfig) {
+        return res.status(400).json({ error: "Invalid network" });
+      }
+
+      // Fetch global stats from GraphQL
+      const response = await fetch(networkConfig.graphql, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: GLOBAL_STATS_QUERY,
+        }),
+      });
+
+      const data = await response.json();
+      
+      if (data.errors) {
+        console.error("GraphQL errors:", data.errors);
+        return res.status(500).json({ error: "Failed to fetch global stats" });
+      }
+
+      const openTrades = data.data?.perp?.trades || [];
+      const vaultsData = data.data?.lp?.vaults || [];
+
+      // Calculate open interest from all open trades
+      let longOpenInterest = 0;
+      let shortOpenInterest = 0;
+      
+      openTrades.forEach((trade: any) => {
+        const positionValue = trade.state?.positionValue ? trade.state.positionValue / 1e6 : 
+          (trade.collateralAmount / 1e6) * trade.leverage;
+        
+        if (trade.isLong) {
+          longOpenInterest += positionValue;
+        } else {
+          shortOpenInterest += positionValue;
+        }
+      });
+
+      // Calculate TVL from vaults
+      const vaults = vaultsData.map((vault: any) => ({
+        id: vault.id,
+        tvl: vault.tvl / 1e6,
+        depositsActive: vault.depositsActive / 1e6,
+        depositsAvailable: vault.depositsAvailable / 1e6,
+        symbol: vault.collateralToken?.symbol || "USDC",
+      }));
+
+      const totalTvl = vaults.reduce((sum: number, v: any) => sum + v.tvl, 0);
+
+      const stats: GlobalStats = {
+        totalTvl,
+        totalOpenInterest: longOpenInterest + shortOpenInterest,
+        totalOpenPositions: openTrades.length,
+        longOpenInterest,
+        shortOpenInterest,
+        vaults,
+      };
+
+      const statsResponse: GlobalStatsResponse = {
+        stats,
+        network,
+      };
+
+      res.json(statsResponse);
+    } catch (error) {
+      console.error("Error fetching global stats:", error);
+      res.status(500).json({ error: "Failed to fetch global stats" });
     }
   });
 

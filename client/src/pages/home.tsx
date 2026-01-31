@@ -23,7 +23,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import type { TradesResponse, Trade, OpenPositionsResponse, OpenPosition } from "@shared/schema";
+import type { TradesResponse, Trade, OpenPositionsResponse, OpenPosition, GlobalStatsResponse } from "@shared/schema";
 
 const addressSchema = z.object({
   address: z.string()
@@ -451,6 +451,15 @@ export default function Home() {
     enabled: !!searchAddress,
   });
 
+  const { data: globalStatsData, isLoading: globalStatsLoading } = useQuery<GlobalStatsResponse>({
+    queryKey: ["/api/stats", network],
+    queryFn: async () => {
+      const res = await fetch(`/api/stats?network=${network}`);
+      if (!res.ok) throw new Error("Failed to fetch global stats");
+      return res.json();
+    },
+  });
+
   const isSearching = isFetching || positionsFetching;
 
   const trades = data?.trades || [];
@@ -816,6 +825,64 @@ export default function Home() {
                           );
                         })()}
                       </div>
+                    )}
+                  </CardContent>
+                </Card>
+
+                {/* Global Protocol Stats */}
+                <Card className="mt-4">
+                  <CardHeader>
+                    <CardTitle>Protocol Stats</CardTitle>
+                    <CardDescription>Global Sai Perps metrics on {network === "mainnet" ? "Mainnet" : "Testnet"}</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {globalStatsLoading ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[...Array(5)].map((_, i) => (
+                          <Skeleton key={i} className="h-20 w-full" />
+                        ))}
+                      </div>
+                    ) : globalStatsData?.stats ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        <div className="p-4 rounded-lg bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-1">Total Value Locked</p>
+                          <p className="text-xl font-bold font-mono text-primary">
+                            ${globalStatsData.stats.totalTvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-1">Total Open Interest</p>
+                          <p className="text-xl font-bold font-mono">
+                            ${globalStatsData.stats.totalOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-1">Open Positions</p>
+                          <p className="text-xl font-bold">{globalStatsData.stats.totalOpenPositions.toLocaleString()}</p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-1">Long Open Interest</p>
+                          <p className="text-xl font-bold font-mono text-green-500">
+                            ${globalStatsData.stats.longOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-1">Short Open Interest</p>
+                          <p className="text-xl font-bold font-mono text-red-500">
+                            ${globalStatsData.stats.shortOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                          </p>
+                        </div>
+                        <div className="p-4 rounded-lg bg-muted/50">
+                          <p className="text-sm text-muted-foreground mb-1">Long/Short Ratio</p>
+                          <p className="text-xl font-bold font-mono">
+                            {globalStatsData.stats.shortOpenInterest > 0 
+                              ? (globalStatsData.stats.longOpenInterest / globalStatsData.stats.shortOpenInterest).toFixed(2)
+                              : globalStatsData.stats.longOpenInterest > 0 ? "∞" : "-"}
+                          </p>
+                        </div>
+                      </div>
+                    ) : (
+                      <p className="text-muted-foreground text-center py-4">Unable to load protocol stats</p>
                     )}
                   </CardContent>
                 </Card>
