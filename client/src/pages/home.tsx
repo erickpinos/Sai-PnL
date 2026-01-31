@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert } from "lucide-react";
+import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -397,7 +398,12 @@ export default function Home() {
   const trades = data?.trades || [];
   const positions = positionsData?.positions || [];
 
+  const addressValue = form.watch("address");
+  const isValidAddress = /^0x[a-fA-F0-9]{40}$/i.test(addressValue);
+
   const onSubmit = (values: AddressForm) => {
+    queryClient.invalidateQueries({ queryKey: ["/api/trades", values.address, network] });
+    queryClient.invalidateQueries({ queryKey: ["/api/positions", values.address, network] });
     setSearchAddress(values.address);
   };
 
@@ -487,7 +493,7 @@ export default function Home() {
                     control={form.control}
                     name="address"
                     render={({ field }) => (
-                      <FormItem className="flex-1">
+                      <FormItem className="flex-1 relative">
                         <FormControl>
                           <div className="relative">
                             <Wallet className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -499,11 +505,13 @@ export default function Home() {
                             />
                           </div>
                         </FormControl>
-                        <FormMessage />
+                        <div className="absolute -bottom-5 left-0">
+                          <FormMessage className="text-xs" />
+                        </div>
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" disabled={isLoading} data-testid="button-search">
+                  <Button type="submit" disabled={isLoading || !isValidAddress} data-testid="button-search">
                     {isLoading ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
