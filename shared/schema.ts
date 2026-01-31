@@ -109,6 +109,8 @@ export interface VaultPosition {
   evmTxHash: string;
   apy: number;
   collateralPriceAtDeposit: number;
+  action: "deposit" | "withdraw";
+  status: "open" | "closed";
 }
 
 export interface VaultPositionsResponse {

@@ -769,53 +769,74 @@ export default function Home() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead>Type</TableHead>
                               <TableHead>Vault</TableHead>
-                              <TableHead>Deposited</TableHead>
+                              <TableHead>Amount</TableHead>
                               <TableHead>Shares</TableHead>
                               <TableHead>Current Value</TableHead>
                               <TableHead>Earnings</TableHead>
                               <TableHead>APY</TableHead>
-                              <TableHead>Deposit Date</TableHead>
+                              <TableHead>Date</TableHead>
                               <TableHead>Tx</TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {vaultPositionsData.positions.map((position, index) => (
-                              <TableRow key={`${position.vaultSymbol}-${index}`} data-testid={`vault-row-${index}`}>
+                              <TableRow key={`${position.vaultSymbol}-${index}`} data-testid={`vault-row-${index}`} className={position.action === "withdraw" ? "opacity-70" : ""}>
+                                <TableCell>
+                                  <Badge 
+                                    variant={position.action === "deposit" ? "default" : "secondary"}
+                                    className={`font-mono text-xs ${position.action === "withdraw" ? "bg-orange-500/20 text-orange-400" : "bg-green-500/20 text-green-400"}`}
+                                  >
+                                    {position.action === "deposit" ? "Deposit" : "Withdraw"}
+                                  </Badge>
+                                </TableCell>
                                 <TableCell>
                                   <Badge variant="outline" className="font-mono">
                                     SLP-{position.vaultSymbol}
                                   </Badge>
                                 </TableCell>
                                 <TableCell className="font-mono">
+                                  {position.action === "withdraw" ? "-" : ""}
                                   {position.depositAmount < 1 
                                     ? position.depositAmount.toFixed(4) 
                                     : position.depositAmount.toFixed(2)
                                   } {position.vaultSymbol}
                                 </TableCell>
                                 <TableCell className="font-mono text-muted-foreground">
+                                  {position.action === "withdraw" ? "-" : ""}
                                   {position.shares < 1 
                                     ? position.shares.toFixed(4) 
                                     : position.shares.toFixed(2)
                                   }
                                 </TableCell>
                                 <TableCell className="font-mono">
-                                  {position.currentValue < 1 
-                                    ? position.currentValue.toFixed(4) 
-                                    : position.currentValue.toFixed(2)
-                                  } {position.vaultSymbol}
+                                  {position.action === "withdraw" ? (
+                                    <span className="text-muted-foreground">-</span>
+                                  ) : (
+                                    <>
+                                      {position.currentValue < 1 
+                                        ? position.currentValue.toFixed(4) 
+                                        : position.currentValue.toFixed(2)
+                                      } {position.vaultSymbol}
+                                    </>
+                                  )}
                                 </TableCell>
                                 <TableCell>
-                                  <span className={`font-mono ${position.earnings >= 0 ? "text-green-500" : "text-red-500"}`}>
-                                    {position.earnings >= 0 ? "+" : ""}
-                                    {position.earnings < 0.01 && position.earnings > -0.01 
-                                      ? position.earnings.toFixed(6)
-                                      : position.earnings.toFixed(4)
-                                    }
-                                    <span className="text-xs text-muted-foreground ml-1">
-                                      ({position.earningsPercent >= 0 ? "+" : ""}{position.earningsPercent.toFixed(2)}%)
+                                  {position.action === "withdraw" ? (
+                                    <span className="text-muted-foreground text-xs">Realized</span>
+                                  ) : (
+                                    <span className={`font-mono ${position.earnings >= 0 ? "text-green-500" : "text-red-500"}`}>
+                                      {position.earnings >= 0 ? "+" : ""}
+                                      {position.earnings < 0.01 && position.earnings > -0.01 
+                                        ? position.earnings.toFixed(6)
+                                        : position.earnings.toFixed(4)
+                                      }
+                                      <span className="text-xs text-muted-foreground ml-1">
+                                        ({position.earningsPercent >= 0 ? "+" : ""}{position.earningsPercent.toFixed(2)}%)
+                                      </span>
                                     </span>
-                                  </span>
+                                  )}
                                 </TableCell>
                                 <TableCell>
                                   <span className="font-mono text-primary">

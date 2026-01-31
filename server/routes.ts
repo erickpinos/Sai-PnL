@@ -942,60 +942,63 @@ export async function registerRoutes(
 
       // Convert to vault positions array with earnings calculation
       const positions: VaultPosition[] = [];
+      const now = new Date();
 
       positionsByVault.forEach((data, symbol) => {
-        // Only include positions with positive shares
-        if (data.totalShares <= 0) return;
-
-        // Get the most recent deposit for this vault
-        const latestDeposit = data.deposits[0];
         const vaultData = vaultMap.get(symbol);
-        
-        // Calculate current value based on share price
-        // Share price = availableAssets / totalShares (simplified)
-        // For now, use the deposited value as a baseline since we don't have total shares
-        const currentApy = vaultData?.apy || latestDeposit?.vault?.apy || 0;
-        
-        // Estimate current value based on time elapsed and APY
-        const depositDate = latestDeposit?.block?.block_ts ? new Date(latestDeposit.block.block_ts) : new Date();
-        const now = new Date();
-        const daysElapsed = (now.getTime() - depositDate.getTime()) / (1000 * 60 * 60 * 24);
-        const yearsElapsed = daysElapsed / 365;
-        
-        // Simple APY calculation for estimated current value
-        const estimatedGrowth = data.totalDeposited * currentApy * yearsElapsed;
-        const currentValue = data.totalDeposited + estimatedGrowth;
-        const earnings = currentValue - data.totalDeposited;
-        const earningsPercent = data.totalDeposited > 0 ? (earnings / data.totalDeposited) * 100 : 0;
+        const currentApy = vaultData?.apy || data.deposits[0]?.vault?.apy || 0;
+        const isVaultOpen = data.totalShares > 0;
 
-        // Create individual position entries for each deposit
-        data.deposits
-          .filter((d: any) => d.action === "deposit")
-          .forEach((deposit: any) => {
-            const depositAmount = parseFloat(deposit.amount) / 1e6;
-            const depositShares = parseFloat(deposit.shares) / 1e6;
-            const depositDate = deposit.block?.block_ts || "";
-            const depositDaysElapsed = depositDate ? (now.getTime() - new Date(depositDate).getTime()) / (1000 * 60 * 60 * 24) : 0;
+        // Create individual position entries for each deposit and withdrawal
+        data.deposits.forEach((entry: any) => {
+          const action = entry.action as "deposit" | "withdraw";
+          const amount = parseFloat(entry.amount) / 1e6;
+          const shares = parseFloat(entry.shares) / 1e6;
+          const entryDate = entry.block?.block_ts || "";
+          
+          if (action === "deposit") {
+            // For deposits, calculate earnings if vault is still open
+            const depositDaysElapsed = entryDate ? (now.getTime() - new Date(entryDate).getTime()) / (1000 * 60 * 60 * 24) : 0;
             const depositYearsElapsed = depositDaysElapsed / 365;
-            const depositEstimatedGrowth = depositAmount * currentApy * depositYearsElapsed;
-            const depositCurrentValue = depositAmount + depositEstimatedGrowth;
-            const depositEarnings = depositCurrentValue - depositAmount;
-            const depositEarningsPercent = depositAmount > 0 ? (depositEarnings / depositAmount) * 100 : 0;
+            const depositEstimatedGrowth = isVaultOpen ? amount * currentApy * depositYearsElapsed : 0;
+            const depositCurrentValue = isVaultOpen ? amount + depositEstimatedGrowth : 0;
+            const depositEarnings = isVaultOpen ? depositEstimatedGrowth : 0;
+            const depositEarningsPercent = amount > 0 && isVaultOpen ? (depositEarnings / amount) * 100 : 0;
 
             positions.push({
               vaultSymbol: symbol,
-              depositAmount,
-              shares: depositShares,
+              depositAmount: amount,
+              shares,
               currentValue: depositCurrentValue,
               earnings: depositEarnings,
               earningsPercent: depositEarningsPercent,
-              depositDate,
-              txHash: deposit.txHash || "",
-              evmTxHash: deposit.evmTxHash || "",
+              depositDate: entryDate,
+              txHash: entry.txHash || "",
+              evmTxHash: entry.evmTxHash || "",
               apy: currentApy,
-              collateralPriceAtDeposit: parseFloat(deposit.collateralPrice) || 0,
+              collateralPriceAtDeposit: parseFloat(entry.collateralPrice) || 0,
+              action: "deposit",
+              status: isVaultOpen ? "open" : "closed",
             });
-          });
+          } else if (action === "withdraw") {
+            // For withdrawals, show as closed position with realized earnings
+            positions.push({
+              vaultSymbol: symbol,
+              depositAmount: amount,
+              shares,
+              currentValue: amount, // Withdrawn amount is the realized value
+              earnings: 0, // Earnings already realized at withdrawal
+              earningsPercent: 0,
+              depositDate: entryDate,
+              txHash: entry.txHash || "",
+              evmTxHash: entry.evmTxHash || "",
+              apy: currentApy,
+              collateralPriceAtDeposit: parseFloat(entry.collateralPrice) || 0,
+              action: "withdraw",
+              status: "closed",
+            });
+          }
+        });
       });
 
       // Sort by deposit date (most recent first), handle invalid dates
