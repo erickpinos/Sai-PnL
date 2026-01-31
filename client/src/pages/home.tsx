@@ -966,98 +966,181 @@ export default function Home() {
                         <p className="text-lg">No trading data available</p>
                       </div>
                     ) : (
-                      <div ref={statsCardRef} className="p-6 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700">
-                        <div className="flex items-center justify-between mb-6">
-                          <div>
-                            <h3 className="text-xl font-bold text-white">Sai Perps Trading Stats</h3>
-                            <p className="text-sm text-slate-400">{searchAddress ? abridgeAddress(searchAddress) : ""} • {network === "mainnet" ? "Mainnet" : "Testnet"}</p>
-                          </div>
-                          <div className="text-right">
-                            <p className="text-sm text-slate-400">Total PnL</p>
-                            <p className={`text-2xl font-bold font-mono ${(data?.totalPnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
-                              {(data?.totalPnl ?? 0) >= 0 ? "+" : "-"}${Math.abs(data?.totalPnl ?? 0).toFixed(2)}
-                            </p>
-                          </div>
-                        </div>
-                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-                        {(() => {
-                          const allTrades = trades;
-                          const closedTrades = trades.filter(t => t.type === "close");
-                          
-                          const totalVolume = allTrades.reduce((sum, t) => sum + (t.collateral ?? 0) * (t.leverage ?? 1), 0);
-                          const avgTradeSize = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.collateral ?? 0), 0) / allTrades.length : 0;
-                          const avgLeverage = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.leverage ?? 1), 0) / allTrades.length : 0;
-                          
-                          const profitTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) > 0);
-                          const lossTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) < 0);
-                          const biggestWin = profitTrades.length > 0 ? Math.max(...profitTrades.map(t => t.pnlAmount ?? 0)) : 0;
-                          const biggestLoss = lossTrades.length > 0 ? Math.min(...lossTrades.map(t => t.pnlAmount ?? 0)) : 0;
-                          
-                          const pairCounts: Record<string, number> = {};
-                          allTrades.forEach(t => {
-                            const pair = t.pair ?? "Unknown";
-                            pairCounts[pair] = (pairCounts[pair] || 0) + 1;
-                          });
-                          const mostTradedPair = Object.entries(pairCounts).sort((a, b) => b[1] - a[1])[0];
-                          
-                          const longTrades = allTrades.filter(t => t.direction === "long").length;
-                          const shortTrades = allTrades.filter(t => t.direction === "short").length;
-                          
-                          const totalFeesPaid = closedTrades.reduce((sum, t) => sum + (t.totalFees ?? 0), 0);
+                      <>
+                        {/* Visible UI - original styling */}
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          {(() => {
+                            const allTrades = trades;
+                            const closedTrades = trades.filter(t => t.type === "close");
+                            
+                            const totalVolume = allTrades.reduce((sum, t) => sum + (t.collateral ?? 0) * (t.leverage ?? 1), 0);
+                            const avgTradeSize = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.collateral ?? 0), 0) / allTrades.length : 0;
+                            const avgLeverage = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.leverage ?? 1), 0) / allTrades.length : 0;
+                            
+                            const profitTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) > 0);
+                            const lossTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) < 0);
+                            const biggestWin = profitTrades.length > 0 ? Math.max(...profitTrades.map(t => t.pnlAmount ?? 0)) : 0;
+                            const biggestLoss = lossTrades.length > 0 ? Math.min(...lossTrades.map(t => t.pnlAmount ?? 0)) : 0;
+                            
+                            const pairCounts: Record<string, number> = {};
+                            allTrades.forEach(t => {
+                              const pair = t.pair ?? "Unknown";
+                              pairCounts[pair] = (pairCounts[pair] || 0) + 1;
+                            });
+                            const mostTradedPair = Object.entries(pairCounts).sort((a, b) => b[1] - a[1])[0];
+                            
+                            const longTrades = allTrades.filter(t => t.direction === "long").length;
+                            const shortTrades = allTrades.filter(t => t.direction === "short").length;
+                            
+                            const totalFeesPaid = closedTrades.reduce((sum, t) => sum + (t.totalFees ?? 0), 0);
 
-                          return (
-                            <>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Total Trading Volume</p>
-                                <p className="text-xl font-bold font-mono text-white">${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Average Trade Size</p>
-                                <p className="text-xl font-bold font-mono text-white">${avgTradeSize.toFixed(2)}</p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Average Leverage</p>
-                                <p className="text-xl font-bold font-mono text-white">{avgLeverage.toFixed(1)}x</p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Biggest Win</p>
-                                <p className="text-xl font-bold font-mono text-green-400">
-                                  {biggestWin > 0 ? `+$${biggestWin.toFixed(2)}` : "-"}
-                                </p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Biggest Loss</p>
-                                <p className="text-xl font-bold font-mono text-red-400">
-                                  {biggestLoss < 0 ? `-$${Math.abs(biggestLoss).toFixed(2)}` : "-"}
-                                </p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Most Traded Pair</p>
-                                <p className="text-xl font-bold text-white">{mostTradedPair ? `${mostTradedPair[0]} (${mostTradedPair[1]})` : "-"}</p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Long vs Short</p>
-                                <p className="text-xl font-bold text-white">{longTrades} / {shortTrades}</p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Total Fees Paid</p>
-                                <p className="text-xl font-bold font-mono text-orange-400">${totalFeesPaid.toFixed(2)}</p>
-                              </div>
-                              <div className="p-4 rounded-lg bg-slate-800/80">
-                                <p className="text-sm text-slate-400 mb-1">Profit Factor</p>
-                                <p className="text-xl font-bold font-mono text-white">
-                                  {(() => {
-                                    const totalProfit = profitTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
-                                    const totalLoss = Math.abs(lossTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0));
-                                    return totalLoss > 0 ? (totalProfit / totalLoss).toFixed(2) : totalProfit > 0 ? "∞" : "-";
-                                  })()}
-                                </p>
-                              </div>
-                            </>
-                          );
-                        })()}
+                            return (
+                              <>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Total Trading Volume</p>
+                                  <p className="text-xl font-bold font-mono">${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Average Trade Size</p>
+                                  <p className="text-xl font-bold font-mono">${avgTradeSize.toFixed(2)}</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Average Leverage</p>
+                                  <p className="text-xl font-bold font-mono">{avgLeverage.toFixed(1)}x</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Biggest Win</p>
+                                  <p className="text-xl font-bold font-mono text-green-500">
+                                    {biggestWin > 0 ? `+$${biggestWin.toFixed(2)}` : "-"}
+                                  </p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Biggest Loss</p>
+                                  <p className="text-xl font-bold font-mono text-red-500">
+                                    {biggestLoss < 0 ? `-$${Math.abs(biggestLoss).toFixed(2)}` : "-"}
+                                  </p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Most Traded Pair</p>
+                                  <p className="text-xl font-bold">{mostTradedPair ? `${mostTradedPair[0]} (${mostTradedPair[1]})` : "-"}</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Long vs Short</p>
+                                  <p className="text-xl font-bold">{longTrades} / {shortTrades}</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Total Fees Paid</p>
+                                  <p className="text-xl font-bold font-mono text-orange-500">${totalFeesPaid.toFixed(2)}</p>
+                                </div>
+                                <div className="p-4 rounded-lg bg-muted/50">
+                                  <p className="text-sm text-muted-foreground mb-1">Profit Factor</p>
+                                  <p className="text-xl font-bold font-mono">
+                                    {(() => {
+                                      const totalProfit = profitTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
+                                      const totalLoss = Math.abs(lossTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0));
+                                      return totalLoss > 0 ? (totalProfit / totalLoss).toFixed(2) : totalProfit > 0 ? "∞" : "-";
+                                    })()}
+                                  </p>
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
-                      </div>
+
+                        {/* Hidden shareable card for download */}
+                        <div ref={statsCardRef} className="absolute -left-[9999px] p-6 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700" style={{ width: '600px' }}>
+                          <div className="flex items-center justify-between mb-6">
+                            <div>
+                              <h3 className="text-xl font-bold text-white">Sai Perps Trading Stats</h3>
+                              <p className="text-sm text-slate-400">{searchAddress ? abridgeAddress(searchAddress) : ""} • {network === "mainnet" ? "Mainnet" : "Testnet"}</p>
+                            </div>
+                            <div className="text-right">
+                              <p className="text-sm text-slate-400">Total PnL</p>
+                              <p className={`text-2xl font-bold font-mono ${(data?.totalPnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                                {(data?.totalPnl ?? 0) >= 0 ? "+" : "-"}${Math.abs(data?.totalPnl ?? 0).toFixed(2)}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="grid grid-cols-3 gap-3">
+                            {(() => {
+                              const allTrades = trades;
+                              const closedTrades = trades.filter(t => t.type === "close");
+                              
+                              const totalVolume = allTrades.reduce((sum, t) => sum + (t.collateral ?? 0) * (t.leverage ?? 1), 0);
+                              const avgTradeSize = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.collateral ?? 0), 0) / allTrades.length : 0;
+                              const avgLeverage = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.leverage ?? 1), 0) / allTrades.length : 0;
+                              
+                              const profitTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) > 0);
+                              const lossTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) < 0);
+                              const biggestWin = profitTrades.length > 0 ? Math.max(...profitTrades.map(t => t.pnlAmount ?? 0)) : 0;
+                              const biggestLoss = lossTrades.length > 0 ? Math.min(...lossTrades.map(t => t.pnlAmount ?? 0)) : 0;
+                              
+                              const pairCounts: Record<string, number> = {};
+                              allTrades.forEach(t => {
+                                const pair = t.pair ?? "Unknown";
+                                pairCounts[pair] = (pairCounts[pair] || 0) + 1;
+                              });
+                              const mostTradedPair = Object.entries(pairCounts).sort((a, b) => b[1] - a[1])[0];
+                              
+                              const longTrades = allTrades.filter(t => t.direction === "long").length;
+                              const shortTrades = allTrades.filter(t => t.direction === "short").length;
+                              
+                              const totalFeesPaid = closedTrades.reduce((sum, t) => sum + (t.totalFees ?? 0), 0);
+
+                              return (
+                                <>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Total Volume</p>
+                                    <p className="text-lg font-bold font-mono text-white">${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Avg Trade Size</p>
+                                    <p className="text-lg font-bold font-mono text-white">${avgTradeSize.toFixed(2)}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Avg Leverage</p>
+                                    <p className="text-lg font-bold font-mono text-white">{avgLeverage.toFixed(1)}x</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Biggest Win</p>
+                                    <p className="text-lg font-bold font-mono text-green-400">
+                                      {biggestWin > 0 ? `+$${biggestWin.toFixed(2)}` : "-"}
+                                    </p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Biggest Loss</p>
+                                    <p className="text-lg font-bold font-mono text-red-400">
+                                      {biggestLoss < 0 ? `-$${Math.abs(biggestLoss).toFixed(2)}` : "-"}
+                                    </p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Most Traded</p>
+                                    <p className="text-lg font-bold text-white">{mostTradedPair ? mostTradedPair[0] : "-"}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Long / Short</p>
+                                    <p className="text-lg font-bold text-white">{longTrades} / {shortTrades}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Fees Paid</p>
+                                    <p className="text-lg font-bold font-mono text-orange-400">${totalFeesPaid.toFixed(2)}</p>
+                                  </div>
+                                  <div className="p-3 rounded-lg bg-slate-800/80">
+                                    <p className="text-xs text-slate-400 mb-1">Profit Factor</p>
+                                    <p className="text-lg font-bold font-mono text-white">
+                                      {(() => {
+                                        const totalProfit = profitTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
+                                        const totalLoss = Math.abs(lossTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0));
+                                        return totalLoss > 0 ? (totalProfit / totalLoss).toFixed(2) : totalProfit > 0 ? "∞" : "-";
+                                      })()}
+                                    </p>
+                                  </div>
+                                </>
+                              );
+                            })()}
+                          </div>
+                        </div>
+                      </>
                     )}
                   </CardContent>
                 </Card>
