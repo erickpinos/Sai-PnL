@@ -387,6 +387,7 @@ export default function Home() {
   const [showAfterFees, setShowAfterFees] = useState(false);
   const [activeTab, setActiveTab] = useState<"trades" | "positions">("trades");
   const [isConnecting, setIsConnecting] = useState(false);
+  const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -409,6 +410,7 @@ export default function Home() {
       
       if (accounts && accounts.length > 0) {
         const address = accounts[0].toLowerCase();
+        setConnectedWallet(address);
         form.setValue("address", address);
         form.handleSubmit(onSubmit)();
       }
@@ -417,6 +419,14 @@ export default function Home() {
     } finally {
       setIsConnecting(false);
     }
+  };
+
+  const disconnectWallet = () => {
+    setConnectedWallet(null);
+  };
+
+  const abridgeAddress = (address: string) => {
+    return `${address.slice(0, 4)}...${address.slice(-4)}`;
   };
 
   const { data, isLoading, isFetching, error } = useQuery<TradesResponse>({
@@ -519,19 +529,39 @@ export default function Home() {
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
-            <Button 
-              onClick={connectWallet} 
-              disabled={isConnecting || isSearching}
-              size="sm"
-              data-testid="button-connect-wallet"
-            >
-              {isConnecting ? (
-                <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              ) : (
-                <Link2 className="h-4 w-4 mr-2" />
-              )}
-              Connect Wallet
-            </Button>
+            {connectedWallet ? (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="outline" size="sm" className="font-mono text-xs gap-2" data-testid="button-wallet-connected">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500" />
+                    {abridgeAddress(connectedWallet)}
+                    <ChevronDown className="h-3 w-3" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem 
+                    onClick={disconnectWallet}
+                    data-testid="menu-item-disconnect"
+                  >
+                    Disconnect
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            ) : (
+              <Button 
+                onClick={connectWallet} 
+                disabled={isConnecting || isSearching}
+                size="sm"
+                data-testid="button-connect-wallet"
+              >
+                {isConnecting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Link2 className="h-4 w-4 mr-2" />
+                )}
+                Connect Wallet
+              </Button>
+            )}
           </div>
         </div>
       </header>
