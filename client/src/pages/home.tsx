@@ -288,8 +288,11 @@ export default function Home() {
   const totalPnlPct = closeTrades.reduce((sum, t) => sum + (t.profitPct ?? 0), 0);
   const totalPnlDollars = closeTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
   const totalFees = closeTrades.reduce((sum, t) => sum + (t.totalFees ?? 0), 0);
+  const totalCollateral = closeTrades.reduce((sum, t) => sum + (t.collateral ?? 0), 0);
   const totalPnlAfterFees = totalPnlDollars - totalFees;
+  const totalPnlAfterFeesPct = totalCollateral > 0 ? totalPnlAfterFees / totalCollateral : 0;
   const displayPnl = showAfterFees ? totalPnlAfterFees : totalPnlDollars;
+  const displayPnlPct = showAfterFees ? totalPnlAfterFeesPct : totalPnlPct;
   const pnlTrend = displayPnl > 0 ? "up" : displayPnl < 0 ? "down" : "neutral";
   
   const togglePnlMode = () => {
@@ -410,7 +413,7 @@ export default function Home() {
                 title="Total P&L"
                 value={trades.length > 0 
                   ? pnlDisplayMode === "percent"
-                    ? `${totalPnlPct >= 0 ? "+" : ""}${(totalPnlPct * 100).toFixed(2)}%`
+                    ? `${displayPnlPct >= 0 ? "+" : ""}${(displayPnlPct * 100).toFixed(2)}%`
                     : `${displayPnl >= 0 ? "+" : ""}$${Math.abs(displayPnl).toFixed(2)}`
                   : "-"}
                 icon={displayPnl >= 0 ? TrendingUp : TrendingDown}
