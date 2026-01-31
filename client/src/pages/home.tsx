@@ -375,7 +375,7 @@ export default function Home() {
     },
   });
 
-  const { data, isLoading, error } = useQuery<TradesResponse>({
+  const { data, isLoading, isFetching, error } = useQuery<TradesResponse>({
     queryKey: ["/api/trades", searchAddress, network],
     queryFn: async () => {
       const res = await fetch(`/api/trades?address=${searchAddress}&network=${network}&limit=500`);
@@ -385,7 +385,7 @@ export default function Home() {
     enabled: !!searchAddress,
   });
 
-  const { data: positionsData, isLoading: positionsLoading } = useQuery<OpenPositionsResponse>({
+  const { data: positionsData, isLoading: positionsLoading, isFetching: positionsFetching } = useQuery<OpenPositionsResponse>({
     queryKey: ["/api/positions", searchAddress, network],
     queryFn: async () => {
       const res = await fetch(`/api/positions?address=${searchAddress}&network=${network}`);
@@ -394,6 +394,8 @@ export default function Home() {
     },
     enabled: !!searchAddress,
   });
+
+  const isSearching = isFetching || positionsFetching;
 
   const trades = data?.trades || [];
   const positions = positionsData?.positions || [];
@@ -511,8 +513,8 @@ export default function Home() {
                       </FormItem>
                     )}
                   />
-                  <Button type="submit" disabled={isLoading || !isValidAddress} data-testid="button-search">
-                    {isLoading ? (
+                  <Button type="submit" disabled={isSearching || !isValidAddress} data-testid="button-search">
+                    {isSearching ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Search className="h-4 w-4" />
