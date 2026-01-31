@@ -385,7 +385,7 @@ export default function Home() {
   const [network, setNetwork] = useState<Network>("mainnet");
   const [pnlDisplayMode, setPnlDisplayMode] = useState<PnlDisplayMode>("percent");
   const [showAfterFees, setShowAfterFees] = useState(false);
-  const [activeTab, setActiveTab] = useState<"trades" | "positions">("trades");
+  const [activeTab, setActiveTab] = useState<"trades" | "positions" | "stats">("trades");
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
   
@@ -665,14 +665,17 @@ export default function Home() {
               />
             </div>
 
-            {/* Tabs for Trades and Positions */}
-            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "trades" | "positions")} className="w-full">
-              <TabsList className="grid w-full max-w-md grid-cols-2">
+            {/* Tabs for Trades, Positions, and Stats */}
+            <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "trades" | "positions" | "stats")} className="w-full">
+              <TabsList className="grid w-full max-w-lg grid-cols-3">
                 <TabsTrigger value="trades" data-testid="tab-trades">
                   Trade History {trades.length > 0 && `(${trades.length})`}
                 </TabsTrigger>
                 <TabsTrigger value="positions" data-testid="tab-positions">
                   Open Positions {positions.length > 0 && `(${positions.length})`}
+                </TabsTrigger>
+                <TabsTrigger value="stats" data-testid="tab-stats">
+                  Stats
                 </TabsTrigger>
               </TabsList>
               
@@ -712,6 +715,108 @@ export default function Home() {
                   </CardHeader>
                   <CardContent>
                     <OpenPositionsTable positions={positions} isLoading={positionsLoading} />
+                  </CardContent>
+                </Card>
+              </TabsContent>
+
+              <TabsContent value="stats" className="mt-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Trading Statistics</CardTitle>
+                    <CardDescription>Personal trading performance metrics</CardDescription>
+                  </CardHeader>
+                  <CardContent>
+                    {isLoading ? (
+                      <div className="space-y-3">
+                        {[...Array(6)].map((_, i) => (
+                          <Skeleton key={i} className="h-12 w-full" />
+                        ))}
+                      </div>
+                    ) : trades.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center py-12 text-muted-foreground">
+                        <Activity className="h-12 w-12 mb-4 opacity-50" />
+                        <p className="text-lg">No trading data available</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {(() => {
+                          const allTrades = trades;
+                          const closedTrades = trades.filter(t => t.type === "close");
+                          
+                          const totalVolume = allTrades.reduce((sum, t) => sum + (t.collateral ?? 0) * (t.leverage ?? 1), 0);
+                          const avgTradeSize = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.collateral ?? 0), 0) / allTrades.length : 0;
+                          const avgLeverage = allTrades.length > 0 ? allTrades.reduce((sum, t) => sum + (t.leverage ?? 1), 0) / allTrades.length : 0;
+                          
+                          const profitTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) > 0);
+                          const lossTrades = closedTrades.filter(t => (t.pnlAmount ?? 0) < 0);
+                          const biggestWin = profitTrades.length > 0 ? Math.max(...profitTrades.map(t => t.pnlAmount ?? 0)) : 0;
+                          const biggestLoss = lossTrades.length > 0 ? Math.min(...lossTrades.map(t => t.pnlAmount ?? 0)) : 0;
+                          
+                          const pairCounts: Record<string, number> = {};
+                          allTrades.forEach(t => {
+                            const pair = t.pair ?? "Unknown";
+                            pairCounts[pair] = (pairCounts[pair] || 0) + 1;
+                          });
+                          const mostTradedPair = Object.entries(pairCounts).sort((a, b) => b[1] - a[1])[0];
+                          
+                          const longTrades = allTrades.filter(t => t.direction === "long").length;
+                          const shortTrades = allTrades.filter(t => t.direction === "short").length;
+                          
+                          const totalFeesPaid = closedTrades.reduce((sum, t) => sum + (t.totalFees ?? 0), 0);
+
+                          return (
+                            <>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Total Trading Volume</p>
+                                <p className="text-xl font-bold font-mono">${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Average Trade Size</p>
+                                <p className="text-xl font-bold font-mono">${avgTradeSize.toFixed(2)}</p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Average Leverage</p>
+                                <p className="text-xl font-bold font-mono">{avgLeverage.toFixed(1)}x</p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Biggest Win</p>
+                                <p className="text-xl font-bold font-mono text-green-500">
+                                  {biggestWin > 0 ? `+$${biggestWin.toFixed(2)}` : "-"}
+                                </p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Biggest Loss</p>
+                                <p className="text-xl font-bold font-mono text-red-500">
+                                  {biggestLoss < 0 ? `-$${Math.abs(biggestLoss).toFixed(2)}` : "-"}
+                                </p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Most Traded Pair</p>
+                                <p className="text-xl font-bold">{mostTradedPair ? `${mostTradedPair[0]} (${mostTradedPair[1]})` : "-"}</p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Long vs Short</p>
+                                <p className="text-xl font-bold">{longTrades} / {shortTrades}</p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Total Fees Paid</p>
+                                <p className="text-xl font-bold font-mono text-orange-500">${totalFeesPaid.toFixed(2)}</p>
+                              </div>
+                              <div className="p-4 rounded-lg bg-muted/50">
+                                <p className="text-sm text-muted-foreground mb-1">Profit Factor</p>
+                                <p className="text-xl font-bold font-mono">
+                                  {(() => {
+                                    const totalProfit = profitTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
+                                    const totalLoss = Math.abs(lossTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0));
+                                    return totalLoss > 0 ? (totalProfit / totalLoss).toFixed(2) : totalProfit > 0 ? "∞" : "-";
+                                  })()}
+                                </p>
+                              </div>
+                            </>
+                          );
+                        })()}
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
