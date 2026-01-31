@@ -277,6 +277,7 @@ function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[
             <TableHead>Direction</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
             <TableHead className="text-right">Entry Price</TableHead>
+            <TableHead className="text-right">Mark Price</TableHead>
             <TableHead className="text-right">Liq. Price</TableHead>
             <TableHead className="text-right">
               <div className="flex items-center justify-end gap-1">
@@ -299,6 +300,12 @@ function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[
           {positions.map((position) => {
             const pnlColor = (position.unrealizedPnlPct ?? 0) >= 0 ? "text-green-500" : "text-red-500";
             
+            const markPrice = position.unrealizedPnlPct !== undefined && position.leverage > 0
+              ? position.direction === "long"
+                ? position.entryPrice * (1 + position.unrealizedPnlPct / position.leverage)
+                : position.entryPrice * (1 - position.unrealizedPnlPct / position.leverage)
+              : undefined;
+            
             return (
               <TableRow key={position.tradeId} data-testid={`row-position-${position.tradeId}`}>
                 <TableCell className="font-medium">{position.pair}</TableCell>
@@ -312,6 +319,9 @@ function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[
                 </TableCell>
                 <TableCell className="text-right font-mono text-sm">
                   {formatPrice(position.entryPrice)}
+                </TableCell>
+                <TableCell className="text-right font-mono text-sm">
+                  {formatPrice(markPrice)}
                 </TableCell>
                 <TableCell className="text-right font-mono text-sm text-orange-500">
                   {formatPrice(position.liquidationPrice)}
