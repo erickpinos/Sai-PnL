@@ -423,6 +423,8 @@ export default function Home() {
 
   const disconnectWallet = () => {
     setConnectedWallet(null);
+    setSearchAddress(null);
+    form.reset();
   };
 
   const abridgeAddress = (address: string) => {
