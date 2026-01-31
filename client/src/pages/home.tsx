@@ -493,31 +493,46 @@ export default function Home() {
               <p className="text-xs text-muted-foreground">Nibiru</p>
             </div>
           </div>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button variant="outline" size="sm" className="text-xs gap-2" data-testid="dropdown-network">
-                <span className={`w-2 h-2 rounded-full ${network === "mainnet" ? "bg-emerald-500" : "bg-amber-500"} animate-pulse`} />
-                {NETWORK_CONFIG[network].label}
-                <ChevronDown className="h-3 w-3" />
-              </Button>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
-              <DropdownMenuItem 
-                onClick={() => handleNetworkChange("mainnet")}
-                data-testid="menu-item-mainnet"
-              >
-                <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
-                Mainnet
-              </DropdownMenuItem>
-              <DropdownMenuItem 
-                onClick={() => handleNetworkChange("testnet")}
-                data-testid="menu-item-testnet"
-              >
-                <span className="w-2 h-2 rounded-full bg-amber-500 mr-2" />
-                Testnet
-              </DropdownMenuItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
+          <div className="flex items-center gap-2">
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Button variant="outline" size="sm" className="text-xs gap-2" data-testid="dropdown-network">
+                  <span className={`w-2 h-2 rounded-full ${network === "mainnet" ? "bg-emerald-500" : "bg-amber-500"} animate-pulse`} />
+                  {NETWORK_CONFIG[network].label}
+                  <ChevronDown className="h-3 w-3" />
+                </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end">
+                <DropdownMenuItem 
+                  onClick={() => handleNetworkChange("mainnet")}
+                  data-testid="menu-item-mainnet"
+                >
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 mr-2" />
+                  Mainnet
+                </DropdownMenuItem>
+                <DropdownMenuItem 
+                  onClick={() => handleNetworkChange("testnet")}
+                  data-testid="menu-item-testnet"
+                >
+                  <span className="w-2 h-2 rounded-full bg-amber-500 mr-2" />
+                  Testnet
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+            <Button 
+              onClick={connectWallet} 
+              disabled={isConnecting || isSearching}
+              size="sm"
+              data-testid="button-connect-wallet"
+            >
+              {isConnecting ? (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              ) : (
+                <Link2 className="h-4 w-4 mr-2" />
+              )}
+              Connect Wallet
+            </Button>
+          </div>
         </div>
       </header>
 
@@ -532,28 +547,7 @@ export default function Home() {
           </div>
 
           <Card>
-            <CardContent className="pt-6 space-y-4">
-              <Button 
-                onClick={connectWallet} 
-                disabled={isConnecting || isSearching}
-                className="w-full"
-                variant="outline"
-                data-testid="button-connect-wallet"
-              >
-                {isConnecting ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Link2 className="h-4 w-4 mr-2" />
-                )}
-                Connect Wallet
-              </Button>
-              
-              <div className="flex items-center gap-3">
-                <div className="flex-1 h-px bg-border" />
-                <span className="text-xs text-muted-foreground">or</span>
-                <div className="flex-1 h-px bg-border" />
-              </div>
-
+            <CardContent className="pt-6">
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-3">
                   <FormField
