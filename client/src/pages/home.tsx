@@ -892,7 +892,7 @@ export default function Home() {
                                 <div key={vault.id || index} className="p-4 rounded-lg border border-border/50 bg-card" data-testid={`vault-card-${index}`}>
                                   <div className="flex items-center justify-between gap-2 mb-2">
                                     <span className="font-medium">{vault.symbol} Vault</span>
-                                    {vault.apy !== undefined && vault.apy !== null && (
+                                    {vault.apy !== undefined && vault.apy !== null && vault.apy > 0 && (
                                       <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
                                         {(vault.apy * 100).toFixed(2)}% APY
                                       </span>
@@ -901,6 +901,11 @@ export default function Home() {
                                   <p className="text-lg font-bold font-mono">
                                     ${vault.tvl.toLocaleString(undefined, { maximumFractionDigits: 2 })}
                                   </p>
+                                  {vault.balance && (
+                                    <p className="text-xs text-muted-foreground mt-1">
+                                      {vault.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {vault.symbol}
+                                    </p>
+                                  )}
                                 </div>
                               ))}
                             </div>

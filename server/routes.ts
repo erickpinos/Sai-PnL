@@ -111,6 +111,14 @@ const GLOBAL_STATS_QUERY = `
         }
       }
     }
+    oracle {
+      tokenPricesUsd {
+        token {
+          symbol
+        }
+        priceUsd
+      }
+    }
   }
 `;
 
@@ -747,6 +755,15 @@ export async function registerRoutes(
 
       const borrowings = data.data?.perp?.borrowings || [];
       const vaultsData = data.data?.lp?.vaults || [];
+      const tokenPrices = data.data?.oracle?.tokenPricesUsd || [];
+
+      // Build a price map from oracle data
+      const priceMap: Record<string, number> = {};
+      tokenPrices.forEach((tp: any) => {
+        if (tp.token?.symbol && tp.priceUsd) {
+          priceMap[tp.token.symbol] = tp.priceUsd;
+        }
+      });
 
       // Calculate open interest from borrowings data
       let longOpenInterest = 0;
@@ -759,15 +776,25 @@ export async function registerRoutes(
         shortOpenInterest += oiShort / 1e6;
       });
 
-      // Calculate TVL from vaults
-      const vaults = vaultsData.map((vault: any, index: number) => ({
-        id: `vault-${index}`,
-        tvl: (vault.tvlCurrent || vault.tvl || 0) / 1e6,
-        depositsActive: 0,
-        depositsAvailable: 0,
-        symbol: vault.collateralToken?.symbol || "USDC",
-        apy: vault.apy || null,
-      }));
+      // Calculate TVL from vaults using availableAssets and oracle prices
+      const vaults = vaultsData.map((vault: any, index: number) => {
+        const symbol = vault.collateralToken?.symbol || "USDC";
+        const availableAssets = vault.availableAssets || 0;
+        const tokenPrice = priceMap[symbol] || 1; // Default to 1 for USDC-like stablecoins
+        // availableAssets is in 6 decimals (micro units)
+        const tvlUsd = (availableAssets / 1e6) * tokenPrice;
+        
+        return {
+          id: `vault-${index}`,
+          tvl: tvlUsd,
+          balance: availableAssets / 1e6,
+          depositsActive: 0,
+          depositsAvailable: 0,
+          symbol,
+          apy: vault.apy || null,
+          tokenPrice,
+        };
+      });
 
       const totalTvl = vaults.reduce((sum: number, v: any) => sum + v.tvl, 0);
 
