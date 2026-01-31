@@ -414,7 +414,7 @@ export default function Home() {
                 value={trades.length > 0 
                   ? pnlDisplayMode === "percent"
                     ? `${displayPnlPct >= 0 ? "+" : ""}${(displayPnlPct * 100).toFixed(2)}%`
-                    : `${displayPnl >= 0 ? "+" : ""}$${Math.abs(displayPnl).toFixed(2)}`
+                    : `${displayPnl >= 0 ? "+" : "-"}$${Math.abs(displayPnl).toFixed(2)}`
                   : "-"}
                 icon={displayPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
