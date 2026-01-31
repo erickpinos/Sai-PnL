@@ -107,7 +107,7 @@ function StatsCard({
   );
 }
 
-function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loading: boolean; pnlDisplayMode: PnlDisplayMode }) {
+function TradesTable({ trades, loading, pnlDisplayMode, onDownload }: { trades: Trade[]; loading: boolean; pnlDisplayMode: PnlDisplayMode; onDownload?: (trade: Trade) => void }) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -148,6 +148,7 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
             <TableHead className="text-right">Net After Fees</TableHead>
             <TableHead>Time Opened</TableHead>
             <TableHead>Time Closed</TableHead>
+            <TableHead></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -245,6 +246,19 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
                   minute: "2-digit",
                 }) : "-"}
               </TableCell>
+              <TableCell>
+                {onDownload && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onDownload(trade)}
+                    data-testid={`button-download-trade-${trade.txHash.slice(0, 8)}`}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
+              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -253,7 +267,7 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
   );
 }
 
-function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[]; isLoading: boolean }) {
+function OpenPositionsTable({ positions, isLoading, onDownload }: { positions: OpenPosition[]; isLoading: boolean; onDownload?: (position: OpenPosition) => void }) {
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -304,6 +318,7 @@ function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[
             <TableHead className="text-right">Unrealized P&L</TableHead>
             <TableHead className="text-right">Borrowing Fee</TableHead>
             <TableHead>Opened</TableHead>
+            <TableHead></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -364,6 +379,19 @@ function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
+                </TableCell>
+                <TableCell>
+                  {onDownload && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onDownload(position)}
+                      data-testid={`button-download-position-${position.tradeId}`}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  )}
                 </TableCell>
               </TableRow>
             );
@@ -451,6 +479,177 @@ export default function Home() {
     } finally {
       setIsDownloading(false);
     }
+  };
+
+  const downloadCard = async (htmlContent: string, filename: string) => {
+    const container = document.createElement("div");
+    container.innerHTML = htmlContent;
+    container.style.position = "absolute";
+    container.style.left = "-9999px";
+    container.style.width = "400px";
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, {
+        backgroundColor: "#0f172a",
+        scale: 2,
+        logging: false,
+        useCORS: true,
+      });
+      
+      const link = document.createElement("a");
+      link.download = filename;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (error) {
+      console.error("Failed to download card:", error);
+    } finally {
+      document.body.removeChild(container);
+    }
+  };
+
+  const downloadTradeCard = (trade: Trade) => {
+    const pnlColor = (trade.pnlAmount ?? 0) >= 0 ? "#4ade80" : "#f87171";
+    const directionColor = trade.direction === "long" ? "#4ade80" : "#f87171";
+    const html = `
+      <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: white;">Sai Perps Trade</h3>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"}</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">P&L</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">
+              ${(trade.pnlAmount ?? 0) >= 0 ? "+" : ""}$${(trade.pnlAmount ?? 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Pair</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white;">${trade.pair || "-"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Direction</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${directionColor};">${trade.direction?.toUpperCase() || "-"} ${trade.leverage}x</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Entry</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.openPrice?.toLocaleString() || "-"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Exit</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.closePrice?.toLocaleString() || "-"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Collateral</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.collateral?.toFixed(2) || "-"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Return</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${(trade.profitPct ?? 0) >= 0 ? "+" : ""}${((trade.profitPct ?? 0) * 100).toFixed(2)}%</p>
+          </div>
+        </div>
+      </div>
+    `;
+    downloadCard(html, `sai-trade-${trade.pair}-${trade.txHash.slice(0, 8)}.png`);
+  };
+
+  const downloadPositionCard = (position: OpenPosition) => {
+    const pnlColor = (position.unrealizedPnlPct ?? 0) >= 0 ? "#4ade80" : "#f87171";
+    const directionColor = position.direction === "long" ? "#4ade80" : "#f87171";
+    const html = `
+      <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: white;">Sai Perps Position</h3>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"} • Open</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">Unrealized P&L</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">
+              ${(position.unrealizedPnl ?? 0) >= 0 ? "+" : ""}$${Math.abs(position.unrealizedPnl ?? 0).toFixed(2)}
+            </p>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Pair</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white;">${position.pair}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Direction</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${directionColor};">${position.direction.toUpperCase()} ${position.leverage}x</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Entry Price</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${position.entryPrice.toLocaleString()}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Collateral</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${position.collateral.toFixed(2)}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Liq. Price</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #94a3b8; font-family: monospace;">$${position.liquidationPrice?.toLocaleString() || "-"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Return</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${(position.unrealizedPnlPct ?? 0) >= 0 ? "+" : ""}${((position.unrealizedPnlPct ?? 0) * 100).toFixed(2)}%</p>
+          </div>
+        </div>
+      </div>
+    `;
+    downloadCard(html, `sai-position-${position.pair}-${position.tradeId}.png`);
+  };
+
+  const downloadVaultCard = (position: VaultPosition) => {
+    const earningsColor = position.earnings >= 0 ? "#4ade80" : "#f87171";
+    const actionColor = position.action === "deposit" ? "#4ade80" : "#fb923c";
+    const html = `
+      <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
+          <div>
+            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: white;">Sai Vault Position</h3>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"} • SLP-${position.vaultSymbol}</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">Earnings</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${earningsColor}; font-family: monospace;">
+              ${position.action === "withdraw" ? "Realized" : `${position.earnings >= 0 ? "+" : ""}$${position.earnings.toFixed(4)}`}
+            </p>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Type</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${actionColor};">${position.action === "deposit" ? "Deposit" : "Withdraw"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Amount</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${position.depositAmount.toFixed(2)} ${position.vaultSymbol}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Shares</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${position.shares.toFixed(4)}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">APY</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #60a5fa; font-family: monospace;">${(position.apy * 100).toFixed(2)}%</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Date</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white;">${position.depositDate ? new Date(position.depositDate).toLocaleDateString() : "-"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Return</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${earningsColor}; font-family: monospace;">${position.action === "withdraw" ? "-" : `+${position.earningsPercent.toFixed(2)}%`}</p>
+          </div>
+        </div>
+      </div>
+    `;
+    downloadCard(html, `sai-vault-${position.vaultSymbol}-${position.txHash.slice(0, 8)}.png`);
   };
 
   const abridgeAddress = (address: string) => {
@@ -740,7 +939,7 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <TradesTable trades={trades} loading={isLoading} pnlDisplayMode={pnlDisplayMode} />
+                    <TradesTable trades={trades} loading={isLoading} pnlDisplayMode={pnlDisplayMode} onDownload={downloadTradeCard} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -762,7 +961,7 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <OpenPositionsTable positions={positions} isLoading={positionsLoading} />
+                    <OpenPositionsTable positions={positions} isLoading={positionsLoading} onDownload={downloadPositionCard} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -804,6 +1003,7 @@ export default function Home() {
                               <TableHead>APY</TableHead>
                               <TableHead>Date</TableHead>
                               <TableHead>Tx</TableHead>
+                              <TableHead></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
@@ -884,6 +1084,17 @@ export default function Home() {
                                       {position.evmTxHash.slice(0, 8)}...
                                     </a>
                                   )}
+                                </TableCell>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => downloadVaultCard(position)}
+                                    data-testid={`button-download-vault-${index}`}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
                                 </TableCell>
                               </TableRow>
                             ))}
