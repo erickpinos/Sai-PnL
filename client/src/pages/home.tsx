@@ -843,44 +843,70 @@ export default function Home() {
                         ))}
                       </div>
                     ) : globalStatsData?.stats ? (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-sm text-muted-foreground mb-1">Total Value Locked</p>
-                          <p className="text-xl font-bold font-mono text-primary">
-                            ${globalStatsData.stats.totalTvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </p>
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Total Value Locked</p>
+                            <p className="text-xl font-bold font-mono text-primary">
+                              ${globalStatsData.stats.totalTvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Total Open Interest</p>
+                            <p className="text-xl font-bold font-mono">
+                              ${globalStatsData.stats.totalOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Open Positions</p>
+                            <p className="text-xl font-bold">{globalStatsData.stats.totalOpenPositions.toLocaleString()}</p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Long Open Interest</p>
+                            <p className="text-xl font-bold font-mono text-green-500">
+                              ${globalStatsData.stats.longOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Short Open Interest</p>
+                            <p className="text-xl font-bold font-mono text-red-500">
+                              ${globalStatsData.stats.shortOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Long/Short Ratio</p>
+                            <p className="text-xl font-bold font-mono">
+                              {globalStatsData.stats.shortOpenInterest > 0 
+                                ? (globalStatsData.stats.longOpenInterest / globalStatsData.stats.shortOpenInterest).toFixed(2)
+                                : globalStatsData.stats.longOpenInterest > 0 ? "∞" : "-"}
+                            </p>
+                          </div>
                         </div>
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-sm text-muted-foreground mb-1">Total Open Interest</p>
-                          <p className="text-xl font-bold font-mono">
-                            ${globalStatsData.stats.totalOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-sm text-muted-foreground mb-1">Open Positions</p>
-                          <p className="text-xl font-bold">{globalStatsData.stats.totalOpenPositions.toLocaleString()}</p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-sm text-muted-foreground mb-1">Long Open Interest</p>
-                          <p className="text-xl font-bold font-mono text-green-500">
-                            ${globalStatsData.stats.longOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-sm text-muted-foreground mb-1">Short Open Interest</p>
-                          <p className="text-xl font-bold font-mono text-red-500">
-                            ${globalStatsData.stats.shortOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}
-                          </p>
-                        </div>
-                        <div className="p-4 rounded-lg bg-muted/50">
-                          <p className="text-sm text-muted-foreground mb-1">Long/Short Ratio</p>
-                          <p className="text-xl font-bold font-mono">
-                            {globalStatsData.stats.shortOpenInterest > 0 
-                              ? (globalStatsData.stats.longOpenInterest / globalStatsData.stats.shortOpenInterest).toFixed(2)
-                              : globalStatsData.stats.longOpenInterest > 0 ? "∞" : "-"}
-                          </p>
-                        </div>
-                      </div>
+                        
+                        {/* Vault Breakdown */}
+                        {globalStatsData.stats.vaults && globalStatsData.stats.vaults.length > 0 && (
+                          <div className="mt-6">
+                            <h4 className="text-sm font-medium text-muted-foreground mb-3">Vault Breakdown</h4>
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                              {globalStatsData.stats.vaults.map((vault: any, index: number) => (
+                                <div key={vault.id || index} className="p-4 rounded-lg border border-border/50 bg-card" data-testid={`vault-card-${index}`}>
+                                  <div className="flex items-center justify-between gap-2 mb-2">
+                                    <span className="font-medium">{vault.symbol} Vault</span>
+                                    {vault.apy !== undefined && vault.apy !== null && (
+                                      <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                                        {(vault.apy * 100).toFixed(2)}% APY
+                                      </span>
+                                    )}
+                                  </div>
+                                  <p className="text-lg font-bold font-mono">
+                                    ${vault.tvl.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                  </p>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </>
                     ) : (
                       <p className="text-muted-foreground text-center py-4">Unable to load protocol stats</p>
                     )}

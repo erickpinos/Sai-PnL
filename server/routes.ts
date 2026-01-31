@@ -766,6 +766,7 @@ export async function registerRoutes(
         depositsActive: 0,
         depositsAvailable: 0,
         symbol: vault.collateralToken?.symbol || "USDC",
+        apy: vault.apy || null,
       }));
 
       const totalTvl = vaults.reduce((sum: number, v: any) => sum + v.tvl, 0);
