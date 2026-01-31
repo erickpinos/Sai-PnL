@@ -3,7 +3,16 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2 } from "lucide-react";
+
+declare global {
+  interface Window {
+    ethereum?: {
+      request: (args: { method: string; params?: unknown[] }) => Promise<unknown>;
+      isMetaMask?: boolean;
+    };
+  }
+}
 import { queryClient } from "@/lib/queryClient";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -377,6 +386,7 @@ export default function Home() {
   const [pnlDisplayMode, setPnlDisplayMode] = useState<PnlDisplayMode>("percent");
   const [showAfterFees, setShowAfterFees] = useState(false);
   const [activeTab, setActiveTab] = useState<"trades" | "positions">("trades");
+  const [isConnecting, setIsConnecting] = useState(false);
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -384,6 +394,30 @@ export default function Home() {
       address: "",
     },
   });
+
+  const connectWallet = async () => {
+    if (!window.ethereum) {
+      alert("Please install MetaMask or Rabby Wallet to connect");
+      return;
+    }
+    
+    try {
+      setIsConnecting(true);
+      const accounts = await window.ethereum.request({ 
+        method: "eth_requestAccounts" 
+      }) as string[];
+      
+      if (accounts && accounts.length > 0) {
+        const address = accounts[0].toLowerCase();
+        form.setValue("address", address);
+        form.handleSubmit(onSubmit)();
+      }
+    } catch (error) {
+      console.error("Failed to connect wallet:", error);
+    } finally {
+      setIsConnecting(false);
+    }
+  };
 
   const { data, isLoading, isFetching, error } = useQuery<TradesResponse>({
     queryKey: ["/api/trades", searchAddress, network],
@@ -493,12 +527,33 @@ export default function Home() {
           <div className="text-center mb-8">
             <h2 className="text-3xl font-bold mb-3">Track Your PnL</h2>
             <p className="text-muted-foreground">
-              Enter your Nibiru address to view your Sai Perps trading history and profit/loss per trade
+              Connect your wallet or enter your Nibiru address to view your Sai Perps trading history and profit/loss per trade
             </p>
           </div>
 
           <Card>
-            <CardContent className="pt-6">
+            <CardContent className="pt-6 space-y-4">
+              <Button 
+                onClick={connectWallet} 
+                disabled={isConnecting || isSearching}
+                className="w-full"
+                variant="outline"
+                data-testid="button-connect-wallet"
+              >
+                {isConnecting ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                ) : (
+                  <Link2 className="h-4 w-4 mr-2" />
+                )}
+                Connect Wallet
+              </Button>
+              
+              <div className="flex items-center gap-3">
+                <div className="flex-1 h-px bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <div className="flex-1 h-px bg-border" />
+              </div>
+
               <Form {...form}>
                 <form onSubmit={form.handleSubmit(onSubmit)} className="flex gap-3">
                   <FormField

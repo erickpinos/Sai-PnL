@@ -4,10 +4,11 @@ A web application for tracking profit and loss on Sai Perps trades on Nibiru.
 
 ## Overview
 
-This application allows users to enter a Nibiru EVM address (0x format) and view their Sai Perps trading history with detailed profit/loss information per trade.
+This application allows users to connect their wallet (MetaMask/Rabby) or enter a Nibiru EVM address (0x format) to view their Sai Perps trading history with detailed profit/loss information per trade.
 
 ## Features
 
+- Connect wallet (MetaMask/Rabby Wallet support via window.ethereum)
 - Enter any Nibiru EVM address (0x format) to analyze trading history
 - Switch between Mainnet and Testnet networks
 - View total PnL, win rate, and trade count
@@ -82,6 +83,8 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-01-31: Added "Connect Wallet" button with MetaMask and Rabby Wallet support
+- 2026-01-31: Added Mark Price column to open positions table
 - 2026-01-30: Implemented RPC-based fee extraction from transaction receipts (opening and closing fees)
 - 2026-01-30: Added Time Opened and Time Closed columns to trade table
 - 2026-01-30: Refactored to use Sai Keeper GraphQL API for instant data retrieval (vs slow RPC block scanning)
