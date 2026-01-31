@@ -86,26 +86,26 @@ const TRADES_QUERY = `
   }
 `;
 
-// GraphQL query for global protocol stats
+// GraphQL query for global protocol stats - using borrowings for open interest
 const GLOBAL_STATS_QUERY = `
   query GetGlobalStats {
     perp {
-      trades(where: { isOpen: true }, limit: 10000) {
-        id
-        isLong
-        collateralAmount
-        leverage
-        state {
-          positionValue
+      borrowings {
+        marketId
+        baseToken {
+          symbol
         }
+        oiLong
+        oiShort
+        oiMax
+        price
       }
     }
     lp {
       vaults {
-        id
         tvl
-        depositsActive
-        depositsAvailable
+        availableAssets
+        apy
         collateralToken {
           symbol
         }
@@ -745,30 +745,26 @@ export async function registerRoutes(
         return res.status(500).json({ error: "Failed to fetch global stats" });
       }
 
-      const openTrades = data.data?.perp?.trades || [];
+      const borrowings = data.data?.perp?.borrowings || [];
       const vaultsData = data.data?.lp?.vaults || [];
 
-      // Calculate open interest from all open trades
+      // Calculate open interest from borrowings data
       let longOpenInterest = 0;
       let shortOpenInterest = 0;
       
-      openTrades.forEach((trade: any) => {
-        const positionValue = trade.state?.positionValue ? trade.state.positionValue / 1e6 : 
-          (trade.collateralAmount / 1e6) * trade.leverage;
-        
-        if (trade.isLong) {
-          longOpenInterest += positionValue;
-        } else {
-          shortOpenInterest += positionValue;
-        }
+      borrowings.forEach((borrowing: any) => {
+        const oiLong = borrowing.oiLong || 0;
+        const oiShort = borrowing.oiShort || 0;
+        longOpenInterest += oiLong / 1e6;
+        shortOpenInterest += oiShort / 1e6;
       });
 
       // Calculate TVL from vaults
-      const vaults = vaultsData.map((vault: any) => ({
-        id: vault.id,
-        tvl: vault.tvl / 1e6,
-        depositsActive: vault.depositsActive / 1e6,
-        depositsAvailable: vault.depositsAvailable / 1e6,
+      const vaults = vaultsData.map((vault: any, index: number) => ({
+        id: `vault-${index}`,
+        tvl: (vault.tvlCurrent || vault.tvl || 0) / 1e6,
+        depositsActive: 0,
+        depositsAvailable: 0,
         symbol: vault.collateralToken?.symbol || "USDC",
       }));
 
@@ -777,7 +773,7 @@ export async function registerRoutes(
       const stats: GlobalStats = {
         totalTvl,
         totalOpenInterest: longOpenInterest + shortOpenInterest,
-        totalOpenPositions: openTrades.length,
+        totalOpenPositions: borrowings.length, // Number of markets with positions
         longOpenInterest,
         shortOpenInterest,
         vaults,
