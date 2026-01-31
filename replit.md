@@ -1,4 +1,4 @@
-# Sai Perps P&L Tracker
+# Sai Perps PnL Tracker
 
 A web application for tracking profit and loss on Sai Perps trades on Nibiru.
 
@@ -10,14 +10,14 @@ This application allows users to enter a Nibiru EVM address (0x format) and view
 
 - Enter any Nibiru EVM address (0x format) to analyze trading history
 - Switch between Mainnet and Testnet networks
-- View total P&L, win rate, and trade count
+- View total PnL, win rate, and trade count
 - Detailed trade history table with:
   - Trading pair (e.g., BTC)
   - Direction (long/short) with leverage
   - Entry/exit prices
   - Time opened and time closed
   - Opening and closing fees (extracted from RPC transaction receipts)
-  - P&L percentage and amount
+  - PnL percentage and amount
   - Collateral
   - Links to nibiscan.io for each transaction
 
@@ -33,14 +33,14 @@ This application allows users to enter a Nibiru EVM address (0x format) and view
 - **server/routes.ts**: API endpoint `/api/trades?address=<address>&network=<mainnet|testnet>&limit=<number>&offset=<number>`
 - Fetches data from Sai Keeper GraphQL API
 - Converts EVM addresses (0x) to Nibiru bech32 format (nibi1) for API queries
-- Merges trade data with trade history to get accurate realized P&L
+- Merges trade data with trade history to get accurate realized PnL
 
 ### Data Flow
 1. User enters Nibiru EVM address (0x format)
 2. Frontend calls `/api/trades?address=<address>&network=<network>`
 3. Backend converts 0x address to nibi1 bech32 format using bech32 library
 4. Backend queries Sai Keeper GraphQL API for trades and trade history
-5. Merges trade data with realized P&L from trade history
+5. Merges trade data with realized PnL from trade history
 6. Returns structured trade data with stats
 
 ## Technical Details
@@ -58,9 +58,9 @@ This application allows users to enter a Nibiru EVM address (0x format) and view
 - `trades` query: Returns trade list with open/close status, prices, leverage
 - `tradeHistory` query: Returns `realizedPnlPct`, `realizedPnlCollateral`, and `evmTxHash` for closed trades
 
-### P&L Data Sources
+### PnL Data Sources
 - For closed trades: `realizedPnlPct` from `tradeHistory` query
-- For open trades: `state.pnlPct` from `trades` query (unrealized P&L)
+- For open trades: `state.pnlPct` from `trades` query (unrealized PnL)
 
 ### Fee Extraction (RPC-based)
 - Fees are extracted from EVM transaction receipts via RPC
@@ -86,6 +86,6 @@ The app runs on port 5000.
 - 2026-01-30: Added Time Opened and Time Closed columns to trade table
 - 2026-01-30: Refactored to use Sai Keeper GraphQL API for instant data retrieval (vs slow RPC block scanning)
 - 2026-01-30: Added EVM to bech32 address conversion
-- 2026-01-30: Fixed P&L display by merging trade data with trade history for realized P&L
+- 2026-01-30: Fixed PnL display by merging trade data with trade history for realized PnL
 - 2026-01-30: Added network switching between Mainnet and Testnet
 - 2026-01-27: Initial implementation with dark crypto theme, address search, and trade history display

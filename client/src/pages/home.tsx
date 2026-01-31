@@ -127,7 +127,7 @@ function TradesTable({ trades, loading, pnlDisplayMode }: { trades: Trade[]; loa
             <TableHead className="text-right">Entry Price</TableHead>
             <TableHead className="text-right">Exit Price</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
-            <TableHead className="text-right">{pnlDisplayMode === "percent" ? "P&L %" : "P&L $"}</TableHead>
+            <TableHead className="text-right">{pnlDisplayMode === "percent" ? "PnL %" : "PnL $"}</TableHead>
             <TableHead className="text-right">Returned</TableHead>
             <TableHead className="text-right">Opening Fee</TableHead>
             <TableHead className="text-right">Closing Fee</TableHead>
@@ -349,7 +349,7 @@ export default function Home() {
         {/* Search Section */}
         <div className="max-w-3xl mx-auto mb-10">
           <div className="text-center mb-8">
-            <h2 className="text-3xl font-bold mb-3">Track Your P&L</h2>
+            <h2 className="text-3xl font-bold mb-3">Track Your PnL</h2>
             <p className="text-muted-foreground">
               Enter your Nibiru address to view your Sai Perps trading history and profit/loss per trade
             </p>
@@ -410,7 +410,7 @@ export default function Home() {
             {/* Stats Grid */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-8">
               <StatsCard
-                title="Total P&L"
+                title="Total PnL"
                 value={trades.length > 0 
                   ? pnlDisplayMode === "percent"
                     ? `${displayPnlPct >= 0 ? "+" : ""}${(displayPnlPct * 100).toFixed(2)}%`
