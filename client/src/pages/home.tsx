@@ -922,7 +922,7 @@ export default function Home() {
                             </p>
                             <p>
                               <span className="font-medium text-foreground/80">Total Open Interest:</span>{" "}
-                              Sum of Long OI + Short OI across all perpetual markets, sourced from the borrowings endpoint (oiLong + oiShort fields).
+                              Sum of Long OI + Short OI across all perpetual markets. This is the notional value (collateral × leverage), sourced from the borrowings endpoint.
                             </p>
                             <p>
                               <span className="font-medium text-foreground/80">Open Positions:</span>{" "}
@@ -930,7 +930,7 @@ export default function Home() {
                             </p>
                             <p>
                               <span className="font-medium text-foreground/80">Long/Short Open Interest:</span>{" "}
-                              Aggregated from each market's oiLong and oiShort values in the borrowings data, converted from micro-units (/1e6).
+                              Notional value (collateral × leverage) for long and short positions respectively, aggregated from each market's oiLong and oiShort values.
                             </p>
                             <p>
                               <span className="font-medium text-foreground/80">Long/Short Ratio:</span>{" "}
