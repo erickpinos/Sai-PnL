@@ -884,33 +884,76 @@ export default function Home() {
                         </div>
                         
                         {/* Vault Breakdown */}
-                        {globalStatsData.stats.vaults && globalStatsData.stats.vaults.length > 0 && (
-                          <div className="mt-6">
-                            <h4 className="text-sm font-medium text-muted-foreground mb-3">Vault Breakdown</h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                              {globalStatsData.stats.vaults.map((vault: any, index: number) => (
-                                <div key={vault.id || index} className="p-4 rounded-lg border border-border/50 bg-card" data-testid={`vault-card-${index}`}>
-                                  <div className="flex items-center justify-between gap-2 mb-2">
-                                    <span className="font-medium">{vault.symbol} Vault</span>
-                                    {vault.apy !== undefined && vault.apy !== null && vault.apy > 0 && (
-                                      <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
-                                        {(vault.apy * 100).toFixed(2)}% APY
-                                      </span>
+                        {globalStatsData.stats.vaults && globalStatsData.stats.vaults.length > 0 && (() => {
+                          const seenSymbols = new Set<string>();
+                          const activeVaults: any[] = [];
+                          const deprecatedVaults: any[] = [];
+                          
+                          globalStatsData.stats.vaults.forEach((vault: any) => {
+                            if (seenSymbols.has(vault.symbol)) {
+                              deprecatedVaults.push(vault);
+                            } else {
+                              seenSymbols.add(vault.symbol);
+                              activeVaults.push(vault);
+                            }
+                          });
+                          
+                          return (
+                            <div className="mt-6">
+                              <h4 className="text-sm font-medium text-muted-foreground mb-3">Vault Breakdown</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                {activeVaults.map((vault: any, index: number) => (
+                                  <div key={vault.id || index} className="p-4 rounded-lg border border-border/50 bg-card" data-testid={`vault-card-${index}`}>
+                                    <div className="flex items-center justify-between gap-2 mb-2">
+                                      <span className="font-medium">{vault.symbol} Vault</span>
+                                      {vault.apy !== undefined && vault.apy !== null && vault.apy > 0 && (
+                                        <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                                          {(vault.apy * 100).toFixed(2)}% APY
+                                        </span>
+                                      )}
+                                    </div>
+                                    <p className="text-lg font-bold font-mono">
+                                      ${vault.tvl.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                    </p>
+                                    {vault.balance && (
+                                      <p className="text-xs text-muted-foreground mt-1">
+                                        {vault.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {vault.symbol}
+                                      </p>
                                     )}
                                   </div>
-                                  <p className="text-lg font-bold font-mono">
-                                    ${vault.tvl.toLocaleString(undefined, { maximumFractionDigits: 2 })}
-                                  </p>
-                                  {vault.balance && (
-                                    <p className="text-xs text-muted-foreground mt-1">
-                                      {vault.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {vault.symbol}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
+                                ))}
+                              </div>
+                              
+                              {deprecatedVaults.length > 0 && (
+                                <details className="mt-4">
+                                  <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+                                    Deprecated/Hidden ({deprecatedVaults.length})
+                                  </summary>
+                                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 opacity-60">
+                                    {deprecatedVaults.map((vault: any, index: number) => (
+                                      <div key={vault.id || `deprecated-${index}`} className="p-4 rounded-lg border border-border/30 bg-card/50" data-testid={`vault-card-deprecated-${index}`}>
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                          <span className="font-medium text-muted-foreground">{vault.symbol} Vault</span>
+                                          <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                                            Deprecated
+                                          </span>
+                                        </div>
+                                        <p className="text-lg font-bold font-mono">
+                                          ${vault.tvl.toLocaleString(undefined, { maximumFractionDigits: 2 })}
+                                        </p>
+                                        {vault.balance && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            {vault.balance.toLocaleString(undefined, { maximumFractionDigits: 2 })} {vault.symbol}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ))}
+                                  </div>
+                                </details>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
 
                         {/* Methodology */}
                         <div className="mt-6 pt-4 border-t border-border/50">
