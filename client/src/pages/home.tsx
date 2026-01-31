@@ -939,7 +939,7 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <TradesTable trades={trades} loading={isLoading} pnlDisplayMode={pnlDisplayMode} onDownload={downloadTradeCard} />
+                    <TradesTable trades={trades.filter(t => t.type === "close")} loading={isLoading} pnlDisplayMode={pnlDisplayMode} onDownload={downloadTradeCard} />
                   </CardContent>
                 </Card>
               </TabsContent>
