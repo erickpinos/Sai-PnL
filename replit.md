@@ -83,6 +83,7 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-01-31: Added vault breakdown section to Protocol Stats showing individual vault TVL, symbol, and APY
 - 2026-01-31: Added "Connect Wallet" button with MetaMask and Rabby Wallet support
 - 2026-01-31: Added Mark Price column to open positions table
 - 2026-01-30: Implemented RPC-based fee extraction from transaction receipts (opening and closing fees)
