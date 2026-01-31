@@ -133,6 +133,7 @@ function TradesTable({ trades, loading, pnlDisplayMode, onDownload }: { trades: 
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead></TableHead>
             <TableHead>Pair</TableHead>
             <TableHead>Direction</TableHead>
             <TableHead className="text-right">Leverage</TableHead>
@@ -148,12 +149,24 @@ function TradesTable({ trades, loading, pnlDisplayMode, onDownload }: { trades: 
             <TableHead className="text-right">Net After Fees</TableHead>
             <TableHead>Time Opened</TableHead>
             <TableHead>Time Closed</TableHead>
-            <TableHead></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {trades.map((trade) => (
             <TableRow key={trade.txHash} data-testid={`row-trade-${trade.txHash.slice(0, 8)}`}>
+              <TableCell>
+                {onDownload && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-8 w-8"
+                    onClick={() => onDownload(trade)}
+                    data-testid={`button-download-trade-${trade.txHash.slice(0, 8)}`}
+                  >
+                    <Download className="h-4 w-4" />
+                  </Button>
+                )}
+              </TableCell>
               <TableCell className="font-medium">
                 {trade.pair || "-"}
               </TableCell>
@@ -246,19 +259,6 @@ function TradesTable({ trades, loading, pnlDisplayMode, onDownload }: { trades: 
                   minute: "2-digit",
                 }) : "-"}
               </TableCell>
-              <TableCell>
-                {onDownload && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    onClick={() => onDownload(trade)}
-                    data-testid={`button-download-trade-${trade.txHash.slice(0, 8)}`}
-                  >
-                    <Download className="h-4 w-4" />
-                  </Button>
-                )}
-              </TableCell>
             </TableRow>
           ))}
         </TableBody>
@@ -297,6 +297,7 @@ function OpenPositionsTable({ positions, isLoading, onDownload }: { positions: O
       <Table>
         <TableHeader>
           <TableRow>
+            <TableHead></TableHead>
             <TableHead>Pair</TableHead>
             <TableHead>Direction</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
@@ -318,7 +319,6 @@ function OpenPositionsTable({ positions, isLoading, onDownload }: { positions: O
             <TableHead className="text-right">Unrealized P&L</TableHead>
             <TableHead className="text-right">Borrowing Fee</TableHead>
             <TableHead>Opened</TableHead>
-            <TableHead></TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -333,6 +333,19 @@ function OpenPositionsTable({ positions, isLoading, onDownload }: { positions: O
             
             return (
               <TableRow key={position.tradeId} data-testid={`row-position-${position.tradeId}`}>
+                <TableCell>
+                  {onDownload && (
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8"
+                      onClick={() => onDownload(position)}
+                      data-testid={`button-download-position-${position.tradeId}`}
+                    >
+                      <Download className="h-4 w-4" />
+                    </Button>
+                  )}
+                </TableCell>
                 <TableCell className="font-medium">{position.pair}</TableCell>
                 <TableCell>
                   <Badge variant={position.direction === "long" ? "default" : "secondary"}>
@@ -379,19 +392,6 @@ function OpenPositionsTable({ positions, isLoading, onDownload }: { positions: O
                     hour: "2-digit",
                     minute: "2-digit",
                   })}
-                </TableCell>
-                <TableCell>
-                  {onDownload && (
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-8 w-8"
-                      onClick={() => onDownload(position)}
-                      data-testid={`button-download-position-${position.tradeId}`}
-                    >
-                      <Download className="h-4 w-4" />
-                    </Button>
-                  )}
                 </TableCell>
               </TableRow>
             );
@@ -994,6 +994,7 @@ export default function Home() {
                         <Table>
                           <TableHeader>
                             <TableRow>
+                              <TableHead></TableHead>
                               <TableHead>Type</TableHead>
                               <TableHead>Vault</TableHead>
                               <TableHead>Amount</TableHead>
@@ -1003,12 +1004,22 @@ export default function Home() {
                               <TableHead>APY</TableHead>
                               <TableHead>Date</TableHead>
                               <TableHead>Tx</TableHead>
-                              <TableHead></TableHead>
                             </TableRow>
                           </TableHeader>
                           <TableBody>
                             {vaultPositionsData.positions.map((position, index) => (
                               <TableRow key={`${position.vaultSymbol}-${index}`} data-testid={`vault-row-${index}`} className={position.action === "withdraw" ? "opacity-70" : ""}>
+                                <TableCell>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-8 w-8"
+                                    onClick={() => downloadVaultCard(position)}
+                                    data-testid={`button-download-vault-${index}`}
+                                  >
+                                    <Download className="h-4 w-4" />
+                                  </Button>
+                                </TableCell>
                                 <TableCell>
                                   <Badge 
                                     variant={position.action === "deposit" ? "default" : "secondary"}
@@ -1084,17 +1095,6 @@ export default function Home() {
                                       {position.evmTxHash.slice(0, 8)}...
                                     </a>
                                   )}
-                                </TableCell>
-                                <TableCell>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-8 w-8"
-                                    onClick={() => downloadVaultCard(position)}
-                                    data-testid={`button-download-vault-${index}`}
-                                  >
-                                    <Download className="h-4 w-4" />
-                                  </Button>
                                 </TableCell>
                               </TableRow>
                             ))}
