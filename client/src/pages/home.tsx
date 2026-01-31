@@ -332,7 +332,7 @@ function OpenPositionsTable({ positions, isLoading }: { positions: OpenPosition[
                 <TableCell className="text-right font-mono text-sm">
                   {formatPrice(markPrice)}
                 </TableCell>
-                <TableCell className="text-right font-mono text-sm text-orange-500">
+                <TableCell className="text-right font-mono text-sm text-muted-foreground">
                   {formatPrice(position.liquidationPrice)}
                 </TableCell>
                 <TableCell className="text-right font-mono text-sm">
