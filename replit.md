@@ -83,6 +83,8 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-01-31: Added methodology explanations for all Protocol Stats metrics (TVL, OI, etc.)
+- 2026-01-31: Fixed vault TVL calculation to use oracle token prices with availableAssets (matches DefiLlama)
 - 2026-01-31: Added vault breakdown section to Protocol Stats showing individual vault TVL, symbol, and APY
 - 2026-01-31: Added "Connect Wallet" button with MetaMask and Rabby Wallet support
 - 2026-01-31: Added Mark Price column to open positions table

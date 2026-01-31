@@ -911,6 +911,33 @@ export default function Home() {
                             </div>
                           </div>
                         )}
+
+                        {/* Methodology */}
+                        <div className="mt-6 pt-4 border-t border-border/50">
+                          <h4 className="text-sm font-medium text-muted-foreground mb-3">Methodology</h4>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p>
+                              <span className="font-medium text-foreground/80">Total Value Locked:</span>{" "}
+                              Sum of all vault balances (availableAssets) multiplied by oracle token prices. USDC priced at ~$1.00, stNIBI priced via Sai Keeper oracle.
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">Total Open Interest:</span>{" "}
+                              Sum of Long OI + Short OI across all perpetual markets, sourced from the borrowings endpoint (oiLong + oiShort fields).
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">Open Positions:</span>{" "}
+                              Count of active perpetual markets with open positions from the borrowings query.
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">Long/Short Open Interest:</span>{" "}
+                              Aggregated from each market's oiLong and oiShort values in the borrowings data, converted from micro-units (/1e6).
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">Long/Short Ratio:</span>{" "}
+                              Calculated as Long Open Interest divided by Short Open Interest.
+                            </p>
+                          </div>
+                        </div>
                       </>
                     ) : (
                       <p className="text-muted-foreground text-center py-4">Unable to load protocol stats</p>
