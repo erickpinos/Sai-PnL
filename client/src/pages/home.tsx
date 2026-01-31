@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2 } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2, Download } from "lucide-react";
+import html2canvas from "html2canvas";
 
 declare global {
   interface Window {
@@ -388,6 +389,8 @@ export default function Home() {
   const [activeTab, setActiveTab] = useState<"trades" | "positions" | "vaults" | "stats">("trades");
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
+  const [isDownloading, setIsDownloading] = useState(false);
+  const statsCardRef = useRef<HTMLDivElement>(null);
   
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -425,6 +428,29 @@ export default function Home() {
     setConnectedWallet(null);
     setSearchAddress(null);
     form.reset();
+  };
+
+  const downloadStatsCard = async () => {
+    if (!statsCardRef.current || !searchAddress) return;
+    
+    setIsDownloading(true);
+    try {
+      const canvas = await html2canvas(statsCardRef.current, {
+        backgroundColor: "#1a1a2e",
+        scale: 2,
+        logging: false,
+        useCORS: true,
+      });
+      
+      const link = document.createElement("a");
+      link.download = `sai-perps-stats-${searchAddress.slice(0, 8)}.png`;
+      link.href = canvas.toDataURL("image/png");
+      link.click();
+    } catch (error) {
+      console.error("Failed to download stats card:", error);
+    } finally {
+      setIsDownloading(false);
+    }
   };
 
   const abridgeAddress = (address: string) => {
@@ -905,9 +931,27 @@ export default function Home() {
 
               <TabsContent value="stats" className="mt-4">
                 <Card>
-                  <CardHeader>
-                    <CardTitle>Trading Statistics</CardTitle>
-                    <CardDescription>Personal trading performance metrics</CardDescription>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2">
+                    <div>
+                      <CardTitle>Trading Statistics</CardTitle>
+                      <CardDescription>Personal trading performance metrics</CardDescription>
+                    </div>
+                    {trades.length > 0 && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={downloadStatsCard}
+                        disabled={isDownloading}
+                        data-testid="button-download-stats"
+                      >
+                        {isDownloading ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                        ) : (
+                          <Download className="h-4 w-4 mr-2" />
+                        )}
+                        Download to Share
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent>
                     {isLoading ? (
@@ -922,7 +966,20 @@ export default function Home() {
                         <p className="text-lg">No trading data available</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                      <div ref={statsCardRef} className="p-6 rounded-xl bg-gradient-to-br from-slate-900 to-slate-800 border border-slate-700">
+                        <div className="flex items-center justify-between mb-6">
+                          <div>
+                            <h3 className="text-xl font-bold text-white">Sai Perps Trading Stats</h3>
+                            <p className="text-sm text-slate-400">{searchAddress ? abridgeAddress(searchAddress) : ""} • {network === "mainnet" ? "Mainnet" : "Testnet"}</p>
+                          </div>
+                          <div className="text-right">
+                            <p className="text-sm text-slate-400">Total PnL</p>
+                            <p className={`text-2xl font-bold font-mono ${(data?.totalPnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}>
+                              {(data?.totalPnl ?? 0) >= 0 ? "+" : "-"}${Math.abs(data?.totalPnl ?? 0).toFixed(2)}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
                         {(() => {
                           const allTrades = trades;
                           const closedTrades = trades.filter(t => t.type === "close");
@@ -950,45 +1007,45 @@ export default function Home() {
 
                           return (
                             <>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Total Trading Volume</p>
-                                <p className="text-xl font-bold font-mono">${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Total Trading Volume</p>
+                                <p className="text-xl font-bold font-mono text-white">${totalVolume.toLocaleString(undefined, { maximumFractionDigits: 2 })}</p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Average Trade Size</p>
-                                <p className="text-xl font-bold font-mono">${avgTradeSize.toFixed(2)}</p>
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Average Trade Size</p>
+                                <p className="text-xl font-bold font-mono text-white">${avgTradeSize.toFixed(2)}</p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Average Leverage</p>
-                                <p className="text-xl font-bold font-mono">{avgLeverage.toFixed(1)}x</p>
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Average Leverage</p>
+                                <p className="text-xl font-bold font-mono text-white">{avgLeverage.toFixed(1)}x</p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Biggest Win</p>
-                                <p className="text-xl font-bold font-mono text-green-500">
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Biggest Win</p>
+                                <p className="text-xl font-bold font-mono text-green-400">
                                   {biggestWin > 0 ? `+$${biggestWin.toFixed(2)}` : "-"}
                                 </p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Biggest Loss</p>
-                                <p className="text-xl font-bold font-mono text-red-500">
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Biggest Loss</p>
+                                <p className="text-xl font-bold font-mono text-red-400">
                                   {biggestLoss < 0 ? `-$${Math.abs(biggestLoss).toFixed(2)}` : "-"}
                                 </p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Most Traded Pair</p>
-                                <p className="text-xl font-bold">{mostTradedPair ? `${mostTradedPair[0]} (${mostTradedPair[1]})` : "-"}</p>
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Most Traded Pair</p>
+                                <p className="text-xl font-bold text-white">{mostTradedPair ? `${mostTradedPair[0]} (${mostTradedPair[1]})` : "-"}</p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Long vs Short</p>
-                                <p className="text-xl font-bold">{longTrades} / {shortTrades}</p>
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Long vs Short</p>
+                                <p className="text-xl font-bold text-white">{longTrades} / {shortTrades}</p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Total Fees Paid</p>
-                                <p className="text-xl font-bold font-mono text-orange-500">${totalFeesPaid.toFixed(2)}</p>
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Total Fees Paid</p>
+                                <p className="text-xl font-bold font-mono text-orange-400">${totalFeesPaid.toFixed(2)}</p>
                               </div>
-                              <div className="p-4 rounded-lg bg-muted/50">
-                                <p className="text-sm text-muted-foreground mb-1">Profit Factor</p>
-                                <p className="text-xl font-bold font-mono">
+                              <div className="p-4 rounded-lg bg-slate-800/80">
+                                <p className="text-sm text-slate-400 mb-1">Profit Factor</p>
+                                <p className="text-xl font-bold font-mono text-white">
                                   {(() => {
                                     const totalProfit = profitTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0);
                                     const totalLoss = Math.abs(lossTrades.reduce((sum, t) => sum + (t.pnlAmount ?? 0), 0));
@@ -999,6 +1056,7 @@ export default function Home() {
                             </>
                           );
                         })()}
+                        </div>
                       </div>
                     )}
                   </CardContent>
