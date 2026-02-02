@@ -83,6 +83,7 @@ export interface GlobalStats {
   totalOpenPositions: number;
   longOpenInterest: number;
   shortOpenInterest: number;
+  totalVolume?: number;
   vaults: {
     id: string;
     tvl: number;

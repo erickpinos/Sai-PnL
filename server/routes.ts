@@ -100,6 +100,9 @@ const GLOBAL_STATS_QUERY = `
         oiMax
         price
       }
+      stats {
+        volume
+      }
     }
     lp {
       vaults {
@@ -793,8 +796,12 @@ export async function registerRoutes(
       }
 
       const borrowings = data.data?.perp?.borrowings || [];
+      const perpStats = data.data?.perp?.stats || {};
       const vaultsData = data.data?.lp?.vaults || [];
       const tokenPrices = data.data?.oracle?.tokenPricesUsd || [];
+      
+      // Get trading volume from perp stats (in micro units, convert to dollars)
+      const totalVolume = perpStats.volume ? perpStats.volume / 1e6 : 0;
 
       // Build a price map from oracle data
       const priceMap: Record<string, number> = {};
@@ -843,6 +850,7 @@ export async function registerRoutes(
         totalOpenPositions: borrowings.length, // Number of markets with positions
         longOpenInterest,
         shortOpenInterest,
+        totalVolume,
         vaults,
       };
 
