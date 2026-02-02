@@ -100,9 +100,6 @@ const GLOBAL_STATS_QUERY = `
         oiMax
         price
       }
-      stats {
-        volume
-      }
     }
     lp {
       vaults {
@@ -796,12 +793,12 @@ export async function registerRoutes(
       }
 
       const borrowings = data.data?.perp?.borrowings || [];
-      const perpStats = data.data?.perp?.stats || {};
       const vaultsData = data.data?.lp?.vaults || [];
       const tokenPrices = data.data?.oracle?.tokenPricesUsd || [];
       
-      // Get trading volume from perp stats (in micro units, convert to dollars)
-      const totalVolume = perpStats.volume ? perpStats.volume / 1e6 : 0;
+      // Note: Trading volume is not yet available from the Sai Keeper GraphQL API
+      // TODO: Add volume when API supports it
+      const totalVolume = 0;
 
       // Build a price map from oracle data
       const priceMap: Record<string, number> = {};

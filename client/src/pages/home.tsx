@@ -502,6 +502,10 @@ export default function Home() {
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8); grid-column: span 2;">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Total Trading Volume</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${(stats.totalVolume ?? 0) > 0 ? 'white' : '#64748b'}; font-family: monospace;">${(stats.totalVolume ?? 0) > 0 ? `$${(stats.totalVolume ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}` : 'Coming Soon'}</p>
+          </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Total Open Interest</p>
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${stats.totalOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
@@ -1439,6 +1443,14 @@ export default function Home() {
                             <p className="text-sm text-muted-foreground mb-1">Total Value Locked</p>
                             <p className="text-xl font-bold font-mono text-primary">
                               ${globalStatsData.stats.totalTvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Total Trading Volume</p>
+                            <p className="text-xl font-bold font-mono">
+                              {(globalStatsData.stats.totalVolume ?? 0) > 0 
+                                ? `$${(globalStatsData.stats.totalVolume ?? 0).toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                                : <span className="text-muted-foreground text-sm">Coming Soon</span>}
                             </p>
                           </div>
                           <div className="p-4 rounded-lg bg-muted/50">
