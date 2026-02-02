@@ -481,6 +481,55 @@ export default function Home() {
     }
   };
 
+  const downloadGlobalStatsCard = async () => {
+    if (!globalStatsData?.stats) return;
+    
+    const stats = globalStatsData.stats;
+    const lsRatio = stats.shortOpenInterest > 0 
+      ? (stats.longOpenInterest / stats.shortOpenInterest).toFixed(2)
+      : stats.longOpenInterest > 0 ? "∞" : "-";
+    
+    const html = `
+      <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif; width: 400px;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+          <div>
+            <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: white;">Sai Perps Protocol Stats</h3>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"}</p>
+          </div>
+          <div style="text-align: right;">
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">TVL</p>
+            <p style="margin: 0; font-size: 22px; font-weight: bold; color: #60a5fa; font-family: monospace;">$${stats.totalTvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          </div>
+        </div>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Total Open Interest</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${stats.totalOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Open Positions</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white;">${stats.totalOpenPositions.toLocaleString()}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Long OI</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #4ade80; font-family: monospace;">$${stats.longOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Short OI</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #f87171; font-family: monospace;">$${stats.shortOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8); grid-column: span 2;">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Long/Short Ratio</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${lsRatio}</p>
+          </div>
+        </div>
+        <p style="margin: 16px 0 0 0; text-align: center; font-size: 11px; color: #64748b;">sai.nibiru.fi • ${new Date().toLocaleDateString()}</p>
+      </div>
+    `;
+    
+    await downloadCard(html, `sai-perps-protocol-stats-${network}.png`);
+  };
+
   const downloadCard = async (htmlContent: string, filename: string) => {
     const container = document.createElement("div");
     container.innerHTML = htmlContent;
@@ -636,7 +685,7 @@ export default function Home() {
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">APY</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #60a5fa; font-family: monospace;">${(position.apy * 100).toFixed(2)}%</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #60a5fa; font-family: monospace;">${position.apy.toFixed(2)}%</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Date</p>
@@ -1077,7 +1126,7 @@ export default function Home() {
                                 </TableCell>
                                 <TableCell>
                                   <span className="font-mono text-primary">
-                                    {(position.apy * 100).toFixed(2)}%
+                                    {position.apy.toFixed(2)}%
                                   </span>
                                 </TableCell>
                                 <TableCell className="text-muted-foreground text-sm">
@@ -1358,9 +1407,23 @@ export default function Home() {
 
                 {/* Global Protocol Stats */}
                 <Card className="mt-4">
-                  <CardHeader>
-                    <CardTitle>Protocol Stats</CardTitle>
-                    <CardDescription>Global Sai Perps metrics on {network === "mainnet" ? "Mainnet" : "Testnet"}</CardDescription>
+                  <CardHeader className="flex flex-row items-start justify-between gap-4">
+                    <div>
+                      <CardTitle>Protocol Stats</CardTitle>
+                      <CardDescription>Global Sai Perps metrics on {network === "mainnet" ? "Mainnet" : "Testnet"}</CardDescription>
+                    </div>
+                    {globalStatsData?.stats && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={downloadGlobalStatsCard}
+                        className="flex items-center gap-2"
+                        data-testid="button-download-global-stats"
+                      >
+                        <Download className="h-4 w-4" />
+                        Download to Share
+                      </Button>
+                    )}
                   </CardHeader>
                   <CardContent>
                     {globalStatsLoading ? (
@@ -1435,7 +1498,7 @@ export default function Home() {
                                       <span className="font-medium">{vault.symbol} Vault</span>
                                       {vault.apy !== undefined && vault.apy !== null && vault.apy > 0 && (
                                         <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
-                                          {(vault.apy * 100).toFixed(2)}% APY
+                                          {vault.apy.toFixed(2)}% APY
                                         </span>
                                       )}
                                     </div>
