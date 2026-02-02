@@ -83,6 +83,7 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-02-02: Added Total Trading Volume to Protocol Stats (shows "Coming Soon" - API doesn't expose volume data yet)
 - 2026-01-31: Added closed vault positions (withdrawals) to "My Vaults" tab with distinct styling
 - 2026-01-31: Added "My Vaults" tab showing user's SLP-USDC and SLP-stNIBI positions with deposit history and earnings
 - 2026-01-31: Hide duplicate stNIBI/USDC vaults under collapsible "Deprecated/Hidden" section
