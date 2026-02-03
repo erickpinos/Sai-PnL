@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2, Share2, Eye, EyeOff } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2, Share2, Eye, EyeOff, Download, Twitter } from "lucide-react";
 import html2canvas from "html2canvas";
 
 declare global {
@@ -1664,9 +1664,40 @@ export default function Home() {
                 data-testid="share-image-preview"
               />
             )}
-            <p className="text-sm text-muted-foreground text-center">
-              Right-click the image and select "Save image as..." to download
-            </p>
+            <div className="flex gap-3">
+              <Button
+                onClick={() => {
+                  if (shareImageUrl) {
+                    const link = document.createElement("a");
+                    link.href = shareImageUrl;
+                    link.download = "sai-perps-trade.png";
+                    document.body.appendChild(link);
+                    link.click();
+                    document.body.removeChild(link);
+                  }
+                }}
+                data-testid="button-download-image"
+              >
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  const text = "Check out my Sai Perps trade on Nibiru! 🚀";
+                  const url = "https://sai.nibiru.fi";
+                  window.open(
+                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+                    "_blank",
+                    "width=550,height=420"
+                  );
+                }}
+                data-testid="button-share-twitter"
+              >
+                <Twitter className="w-4 h-4 mr-2" />
+                Share to Twitter
+              </Button>
+            </div>
           </div>
         </DialogContent>
       </Dialog>
