@@ -1,0 +1,142 @@
+Better Solution: Query Separately
+Step 1: Get trades WITHOUT perpBorrowing
+typescriptconst TRADES_QUERY = `
+  query($trader: String!) {
+    perp {
+      trades(where: { trader: $trader }) {
+        id
+        leverage
+        openPrice
+        closePrice
+        collateralAmount
+        isOpen
+        isLong
+        # NO perpBorrowing!
+      }
+    }
+  }
+`;
+Step 2: Get ALL markets separately
+typescriptconst MARKETS_QUERY = `
+  query {
+    perp {
+      borrowings(limit: 100) {
+        marketId
+        baseToken { symbol }
+        collateralToken { symbol }
+        price
+      }
+    }
+  }
+`;
+Step 3: Match them in your code
+typescriptasync function fetchTradesWithMarkets(trader: string) {
+  // Get both independently
+  const [tradesResult, marketsResult] = await Promise.all([
+    graphqlQuery(TRADES_QUERY, { trader }),
+    graphqlQuery(MARKETS_QUERY)
+  ]);
+  
+  const trades = tradesResult.data.perp.trades;
+  const markets = marketsResult.data.perp.borrowings;
+  
+  // Match by price (approximate)
+  return trades.map(trade => {
+    const market = markets.find(m => 
+      Math.abs(m.price - trade.openPrice) < m.price * 0.1
+    );
+    
+    return {
+      ...trade,
+      perpBorrowing: market || null
+    };
+  });
+}
+Step 4: Use in UI
+typescriptconst pairName = trade.perpBorrowing?.baseToken?.symbol || "Unknown";
+Pros of This Approach
+
+✅ Always gets all trades (never fails)
+✅ Gets market info for most trades (by matching price)
+✅ Simple logic, no error handling needed
+✅ Works even when new broken trades appear
+
+Cons
+
+⚠️ Price matching is approximate (but good enough for display)
+⚠️ Coded Estate trade won't match any market (shows "Unknown")
+
+This is the simplest working solution given the API limitation.so this won't work? Option 1: Make perpBorrowing Optional (Simplest)
+Just make perpBorrowing nullable everywhere and handle it in the UI:
+typescriptinterface PerpTrade {
+  // ... other fields
+  perpBorrowing: PerpBorrowingShortInfo | null;  // Add | null
+}
+
+// In your display code:
+const pairName = trade.perpBorrowing?.baseToken?.symbol || "Unknown Market";
+const collateral = trade.perpBorrowing?.collateralToken?.symbol || "Unknown";Show more5:10 PMCorrect, Option 1 alone won't work because of the GraphQL query problem you identified.
+Why Option 1 Fails
+Making the TypeScript type nullable doesn't solve the actual problem:
+typescript// Your TypeScript type
+interface PerpTrade {
+  perpBorrowing: PerpBorrowingShortInfo | null;  // This is just TypeScript
+}
+
+// But your GraphQL query still does this:
+const QUERY = `
+  query {
+    perp {
+      trades(where: { trader: $trader }) {
+        perpBorrowing {           # ← API fails HERE
+          baseToken { symbol }    # Before data reaches your code
+        }
+      }
+    }
+  }
+`;
+The GraphQL API fails before the data reaches your TypeScript code, so your nullable type never gets a chance to help.
+Option 1 ONLY Works If...
+You also change your query to not request perpBorrowing:
+typescript// Option 1 COMPLETE solution:
+
+// 1. Make type nullable
+interface PerpTrade {
+  perpBorrowing: PerpBorrowingShortInfo | null;
+}
+
+// 2. DON'T query perpBorrowing at all
+const QUERY = `
+  query {
+    perp {
+      trades(where: { trader: $trader }) {
+        id
+        leverage
+        openPrice
+        # NO perpBorrowing field!
+      }
+    }
+  }
+`;
+
+// 3. Manually set it to null
+const trades = result.data.perp.trades.map(t => ({
+  ...t,
+  perpBorrowing: null  // Manually add null
+}));
+
+// 4. Handle null in UI
+const market = trade.perpBorrowing?.baseToken?.symbol || "Unknown";
+But now all trades show "Unknown" for the market, even the ones that could have had valid data.
+So the Real Solution Is
+Option 1 + Query markets separately (what I described in the previous message):
+typescript// 1. Type is nullable
+interface PerpTrade {
+  perpBorrowing: PerpBorrowingShortInfo | null;
+}
+
+// 2. Query trades without perpBorrowing
+// 3. Query markets separately
+// 4. Match them by price
+// 5. Handle nulls in UI
+Sorry for the confusion earlier - you're right that just changing the TypeScript type alone doesn't solve it!
