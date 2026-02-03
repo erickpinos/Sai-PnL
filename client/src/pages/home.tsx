@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2, Download } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2, Share2 } from "lucide-react";
 import html2canvas from "html2canvas";
 
 declare global {
@@ -24,6 +24,7 @@ import { Form, FormControl, FormField, FormItem, FormMessage } from "@/component
 import { Skeleton } from "@/components/ui/skeleton";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import type { TradesResponse, Trade, OpenPositionsResponse, OpenPosition, GlobalStatsResponse, VaultPositionsResponse, VaultPosition } from "@shared/schema";
 
 const addressSchema = z.object({
@@ -107,7 +108,7 @@ function StatsCard({
   );
 }
 
-function TradesTable({ trades, loading, pnlDisplayMode, onDownload }: { trades: Trade[]; loading: boolean; pnlDisplayMode: PnlDisplayMode; onDownload?: (trade: Trade) => void }) {
+function TradesTable({ trades, loading, pnlDisplayMode, onShare }: { trades: Trade[]; loading: boolean; pnlDisplayMode: PnlDisplayMode; onShare?: (trade: Trade) => void }) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -155,15 +156,15 @@ function TradesTable({ trades, loading, pnlDisplayMode, onDownload }: { trades: 
           {trades.map((trade) => (
             <TableRow key={trade.txHash} data-testid={`row-trade-${trade.txHash.slice(0, 8)}`}>
               <TableCell>
-                {onDownload && (
+                {onShare && (
                   <Button
                     variant="ghost"
                     size="icon"
                     className="h-8 w-8"
-                    onClick={() => onDownload(trade)}
-                    data-testid={`button-download-trade-${trade.txHash.slice(0, 8)}`}
+                    onClick={() => onShare(trade)}
+                    data-testid={`button-share-trade-${trade.txHash.slice(0, 8)}`}
                   >
-                    <Download className="h-4 w-4" />
+                    <Share2 className="h-4 w-4" />
                   </Button>
                 )}
               </TableCell>
@@ -267,7 +268,7 @@ function TradesTable({ trades, loading, pnlDisplayMode, onDownload }: { trades: 
   );
 }
 
-function OpenPositionsTable({ positions, isLoading, onDownload }: { positions: OpenPosition[]; isLoading: boolean; onDownload?: (position: OpenPosition) => void }) {
+function OpenPositionsTable({ positions, isLoading, onShare }: { positions: OpenPosition[]; isLoading: boolean; onShare?: (position: OpenPosition) => void }) {
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -334,15 +335,15 @@ function OpenPositionsTable({ positions, isLoading, onDownload }: { positions: O
             return (
               <TableRow key={position.tradeId} data-testid={`row-position-${position.tradeId}`}>
                 <TableCell>
-                  {onDownload && (
+                  {onShare && (
                     <Button
                       variant="ghost"
                       size="icon"
                       className="h-8 w-8"
-                      onClick={() => onDownload(position)}
-                      data-testid={`button-download-position-${position.tradeId}`}
+                      onClick={() => onShare(position)}
+                      data-testid={`button-share-position-${position.tradeId}`}
                     >
-                      <Download className="h-4 w-4" />
+                      <Share2 className="h-4 w-4" />
                     </Button>
                   )}
                 </TableCell>
@@ -418,6 +419,8 @@ export default function Home() {
   const [isConnecting, setIsConnecting] = useState(false);
   const [connectedWallet, setConnectedWallet] = useState<string | null>(null);
   const [isDownloading, setIsDownloading] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
+  const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
   const statsCardRef = useRef<HTMLDivElement>(null);
   
   const form = useForm<AddressForm>({
@@ -531,10 +534,10 @@ export default function Home() {
       </div>
     `;
     
-    await downloadCard(html, `sai-perps-protocol-stats-${network}.png`);
+    await showShareModal(html);
   };
 
-  const downloadCard = async (htmlContent: string, filename: string) => {
+  const showShareModal = async (htmlContent: string) => {
     const container = document.createElement("div");
     container.innerHTML = htmlContent;
     container.style.position = "absolute";
@@ -550,12 +553,11 @@ export default function Home() {
         useCORS: true,
       });
       
-      const link = document.createElement("a");
-      link.download = filename;
-      link.href = canvas.toDataURL("image/png");
-      link.click();
+      const imageUrl = canvas.toDataURL("image/png");
+      setShareImageUrl(imageUrl);
+      setShareModalOpen(true);
     } catch (error) {
-      console.error("Failed to download card:", error);
+      console.error("Failed to generate share image:", error);
     } finally {
       document.body.removeChild(container);
     }
@@ -606,7 +608,7 @@ export default function Home() {
         </div>
       </div>
     `;
-    downloadCard(html, `sai-trade-${trade.pair}-${trade.txHash.slice(0, 8)}.png`);
+    showShareModal(html);
   };
 
   const downloadPositionCard = (position: OpenPosition) => {
@@ -654,7 +656,7 @@ export default function Home() {
         </div>
       </div>
     `;
-    downloadCard(html, `sai-position-${position.pair}-${position.tradeId}.png`);
+    showShareModal(html);
   };
 
   const downloadVaultCard = (position: VaultPosition) => {
@@ -702,7 +704,7 @@ export default function Home() {
         </div>
       </div>
     `;
-    downloadCard(html, `sai-vault-${position.vaultSymbol}-${position.txHash.slice(0, 8)}.png`);
+    showShareModal(html);
   };
 
   const abridgeAddress = (address: string) => {
@@ -992,7 +994,7 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <TradesTable trades={trades.filter(t => t.type === "close")} loading={isLoading} pnlDisplayMode={pnlDisplayMode} onDownload={downloadTradeCard} />
+                    <TradesTable trades={trades.filter(t => t.type === "close")} loading={isLoading} pnlDisplayMode={pnlDisplayMode} onShare={downloadTradeCard} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1014,7 +1016,7 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <OpenPositionsTable positions={positions} isLoading={positionsLoading} onDownload={downloadPositionCard} />
+                    <OpenPositionsTable positions={positions} isLoading={positionsLoading} onShare={downloadPositionCard} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1068,9 +1070,9 @@ export default function Home() {
                                     size="icon"
                                     className="h-8 w-8"
                                     onClick={() => downloadVaultCard(position)}
-                                    data-testid={`button-download-vault-${index}`}
+                                    data-testid={`button-share-vault-${index}`}
                                   >
-                                    <Download className="h-4 w-4" />
+                                    <Share2 className="h-4 w-4" />
                                   </Button>
                                 </TableCell>
                                 <TableCell>
@@ -1206,14 +1208,14 @@ export default function Home() {
                         size="sm"
                         onClick={downloadStatsCard}
                         disabled={isDownloading}
-                        data-testid="button-download-stats"
+                        data-testid="button-share-stats"
                       >
                         {isDownloading ? (
                           <Loader2 className="h-4 w-4 animate-spin mr-2" />
                         ) : (
-                          <Download className="h-4 w-4 mr-2" />
+                          <Share2 className="h-4 w-4 mr-2" />
                         )}
-                        Download to Share
+                        Share
                       </Button>
                     )}
                   </CardHeader>
@@ -1422,10 +1424,10 @@ export default function Home() {
                         size="sm"
                         onClick={downloadGlobalStatsCard}
                         className="flex items-center gap-2"
-                        data-testid="button-download-global-stats"
+                        data-testid="button-share-global-stats"
                       >
-                        <Download className="h-4 w-4" />
-                        Download to Share
+                        <Share2 className="h-4 w-4" />
+                        Share
                       </Button>
                     )}
                   </CardHeader>
@@ -1614,6 +1616,28 @@ export default function Home() {
           <p>Data sourced from Sai Keeper API</p>
         </div>
       </footer>
+
+      {/* Share Modal */}
+      <Dialog open={shareModalOpen} onOpenChange={setShareModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Share Your Stats</DialogTitle>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4">
+            {shareImageUrl && (
+              <img 
+                src={shareImageUrl} 
+                alt="Share card" 
+                className="max-w-full rounded-lg border border-border shadow-lg"
+                data-testid="share-image-preview"
+              />
+            )}
+            <p className="text-sm text-muted-foreground text-center">
+              Right-click the image and select "Save image as..." to download
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
