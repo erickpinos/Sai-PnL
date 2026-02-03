@@ -108,7 +108,7 @@ function StatsCard({
   );
 }
 
-function TradesTable({ trades, loading, pnlDisplayMode, onShare }: { trades: Trade[]; loading: boolean; pnlDisplayMode: PnlDisplayMode; onShare?: (trade: Trade) => void }) {
+function TradesTable({ trades, loading, pnlDisplayMode, onShare, hideValues }: { trades: Trade[]; loading: boolean; pnlDisplayMode: PnlDisplayMode; onShare?: (trade: Trade) => void; hideValues?: boolean }) {
   if (loading) {
     return (
       <div className="space-y-3">
@@ -199,7 +199,7 @@ function TradesTable({ trades, loading, pnlDisplayMode, onShare }: { trades: Tra
                 {trade.closePrice ? `$${trade.closePrice.toLocaleString()}` : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
-                {trade.collateral ? `$${trade.collateral.toFixed(2)}` : "-"}
+                {hideValues ? "•••••" : (trade.collateral ? `$${trade.collateral.toFixed(2)}` : "-")}
               </TableCell>
               <TableCell className="text-right">
                 {pnlDisplayMode === "percent" ? (
@@ -213,7 +213,9 @@ function TradesTable({ trades, loading, pnlDisplayMode, onShare }: { trades: Tra
                     <span className="text-muted-foreground">-</span>
                   )
                 ) : (
-                  trade.pnlAmount !== undefined ? (
+                  hideValues ? (
+                    <span className="text-muted-foreground">•••••</span>
+                  ) : trade.pnlAmount !== undefined ? (
                     <span className={`font-semibold ${
                       trade.pnlAmount >= 0 ? "text-emerald-500" : "text-red-500"
                     }`}>
@@ -225,7 +227,7 @@ function TradesTable({ trades, loading, pnlDisplayMode, onShare }: { trades: Tra
                 )}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
-                {trade.amountReceived !== undefined ? `$${trade.amountReceived.toFixed(2)}` : "-"}
+                {hideValues ? "•••••" : (trade.amountReceived !== undefined ? `$${trade.amountReceived.toFixed(2)}` : "-")}
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {trade.openingFee !== undefined ? `$${trade.openingFee.toFixed(4)}` : "-"}
@@ -240,9 +242,9 @@ function TradesTable({ trades, loading, pnlDisplayMode, onShare }: { trades: Tra
                 {trade.triggerFee !== undefined && trade.triggerFee > 0 ? `$${trade.triggerFee.toFixed(4)}` : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
-                {trade.amountReceived !== undefined && trade.totalFees !== undefined 
+                {hideValues ? "•••••" : (trade.amountReceived !== undefined && trade.totalFees !== undefined 
                   ? `$${(trade.amountReceived - trade.totalFees).toFixed(2)}`
-                  : "-"}
+                  : "-")}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleString(undefined, {
@@ -268,7 +270,7 @@ function TradesTable({ trades, loading, pnlDisplayMode, onShare }: { trades: Tra
   );
 }
 
-function OpenPositionsTable({ positions, isLoading, onShare }: { positions: OpenPosition[]; isLoading: boolean; onShare?: (position: OpenPosition) => void }) {
+function OpenPositionsTable({ positions, isLoading, onShare, hideValues }: { positions: OpenPosition[]; isLoading: boolean; onShare?: (position: OpenPosition) => void; hideValues?: boolean }) {
   if (isLoading) {
     return (
       <div className="space-y-2">
@@ -354,7 +356,7 @@ function OpenPositionsTable({ positions, isLoading, onShare }: { positions: Open
                   </Badge>
                 </TableCell>
                 <TableCell className="text-right font-mono text-sm">
-                  ${position.collateral.toFixed(2)}
+                  {hideValues ? "•••••" : `$${position.collateral.toFixed(2)}`}
                 </TableCell>
                 <TableCell className="text-right font-mono text-sm">
                   {formatPrice(position.entryPrice)}
@@ -372,7 +374,9 @@ function OpenPositionsTable({ positions, isLoading, onShare }: { positions: Open
                   {formatPrice(position.takeProfit)}
                 </TableCell>
                 <TableCell className={`text-right font-mono text-sm ${pnlColor}`}>
-                  {position.unrealizedPnl !== undefined ? (
+                  {hideValues ? (
+                    <span className="text-muted-foreground">•••••</span>
+                  ) : position.unrealizedPnl !== undefined ? (
                     <>
                       {position.unrealizedPnl >= 0 ? "+" : "-"}${Math.abs(position.unrealizedPnl).toFixed(2)}
                       <span className="text-xs ml-1">
@@ -947,7 +951,9 @@ export default function Home() {
                 value={trades.length > 0 
                   ? pnlDisplayMode === "percent"
                     ? `${displayPnlPct >= 0 ? "+" : ""}${(displayPnlPct * 100).toFixed(2)}%`
-                    : `${displayPnl >= 0 ? "+" : "-"}$${Math.abs(displayPnl).toFixed(2)}`
+                    : addressHidden 
+                      ? "•••••"
+                      : `${displayPnl >= 0 ? "+" : "-"}$${Math.abs(displayPnl).toFixed(2)}`
                   : "-"}
                 icon={displayPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
@@ -1003,7 +1009,7 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <TradesTable trades={trades.filter(t => t.type === "close")} loading={isLoading} pnlDisplayMode={pnlDisplayMode} onShare={downloadTradeCard} />
+                    <TradesTable trades={trades.filter(t => t.type === "close")} loading={isLoading} pnlDisplayMode={pnlDisplayMode} onShare={downloadTradeCard} hideValues={addressHidden} />
                   </CardContent>
                 </Card>
               </TabsContent>
@@ -1025,7 +1031,7 @@ export default function Home() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <OpenPositionsTable positions={positions} isLoading={positionsLoading} onShare={downloadPositionCard} />
+                    <OpenPositionsTable positions={positions} isLoading={positionsLoading} onShare={downloadPositionCard} hideValues={addressHidden} />
                   </CardContent>
                 </Card>
               </TabsContent>
