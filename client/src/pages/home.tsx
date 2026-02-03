@@ -629,8 +629,8 @@ export default function Home() {
             <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.closeTimestamp ? new Date(trade.closeTimestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "-"}</p>
           </div>
         </div>
-        <div style="margin-top: 12px; padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8); display: flex; align-items: center; justify-content: center;">
-          <p style="margin: 0; font-size: 13px; color: #94a3b8;">Position was open for <span style="color: white; font-weight: bold;">${durationText}</span></p>
+        <div style="margin-top: 16px; text-align: center;">
+          <p style="margin: 0; font-size: 12px; color: #94a3b8;">Position was open for <span style="color: white; font-weight: bold;">${durationText}</span></p>
         </div>
       </div>
     `;
