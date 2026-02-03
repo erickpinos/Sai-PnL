@@ -1,9 +1,11 @@
 export const SHARE_MESSAGES = {
-  closedTrade: "Check out my Sai Perps trade on Nibiru! 🚀",
-  openPosition: "Check out my open Sai Perps position on Nibiru! 📈",
-  lpVault: "Check out my Sai vault position on Nibiru! 💰",
-  tradingStats: "Check out my Sai Perps trading stats on @SaiDotFun! 📊",
-  globalStats: "Check out the Sai Perps protocol stats on @SaiDotFun! 🌐",
+  closedTrade: "Check out my @SaiDotFun Perps trade on @NibiruChain! 🚀",
+  openPosition:
+    "Check out my open @SaiDotFun Perps position on @NibiruChain! 📈",
+  lpVault: "Check out my @SaiDotFun vault position on @NibiruChain! 💰",
+  tradingStats:
+    "Check out my @SaiDotFun Perps trading stats on @NibiruChain! 📊",
+  globalStats: "Check out the @SaiDotFun global stats on @NibiruChain! 🌐",
 };
 
 export const SHARE_URL = "https://sai.fun";

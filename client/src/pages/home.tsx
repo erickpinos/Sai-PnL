@@ -577,6 +577,8 @@ export default function Home() {
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
   const [shareMessageType, setShareMessageType] = useState<keyof typeof SHARE_MESSAGES>("closedTrade");
+  const [shareHideAmount, setShareHideAmount] = useState(false);
+  const [currentShareData, setCurrentShareData] = useState<{ type: string; data: Trade | OpenPosition | VaultPosition | null }>({ type: "", data: null });
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [statsImageUrl, setStatsImageUrl] = useState<string | null>(null);
   const [hideStatsAmount, setHideStatsAmount] = useState(false);
@@ -724,31 +726,67 @@ export default function Home() {
     }
   };
 
-  const downloadTradeCard = (trade: Trade) => {
+  const regenerateShareImage = async (hideAmount: boolean) => {
+    const { type, data } = currentShareData;
+    if (!data) return;
+
+    let html = "";
+    if (type === "trade") {
+      html = generateTradeCardHtml(data as Trade, hideAmount);
+    } else if (type === "position") {
+      html = generatePositionCardHtml(data as OpenPosition, hideAmount);
+    } else if (type === "vault") {
+      html = generateVaultCardHtml(data as VaultPosition, hideAmount);
+    }
+
+    if (!html) return;
+
+    const container = document.createElement("div");
+    container.innerHTML = html;
+    container.style.position = "absolute";
+    container.style.left = "-9999px";
+    container.style.width = "520px";
+    document.body.appendChild(container);
+
+    try {
+      const canvas = await html2canvas(container, {
+        backgroundColor: "#0f172a",
+        scale: 2,
+        logging: false,
+        useCORS: true,
+      });
+      setShareImageUrl(canvas.toDataURL("image/png"));
+    } catch (error) {
+      console.error("Failed to regenerate share image:", error);
+    } finally {
+      document.body.removeChild(container);
+    }
+  };
+
+  const generateTradeCardHtml = (trade: Trade, hideAmount: boolean) => {
     const pnlColor = (trade.pnlAmount ?? 0) >= 0 ? "#4ade80" : "#f87171";
     const directionColor = trade.direction === "long" ? "#4ade80" : "#f87171";
 
-    // Calculate duration
     let durationText = "-";
     if (trade.openTimestamp && trade.closeTimestamp) {
       const openDate = new Date(trade.openTimestamp);
       const closeDate = new Date(trade.closeTimestamp);
       const diffMs = closeDate.getTime() - openDate.getTime();
       const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-      const hours = Math.floor(
-        (diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60),
-      );
+      const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
       const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
-
       const parts = [];
       if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
       if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? "s" : ""}`);
-      if (minutes > 0 || parts.length === 0)
-        parts.push(`${minutes} minute${minutes !== 1 ? "s" : ""}`);
+      if (minutes > 0 || parts.length === 0) parts.push(`${minutes} minute${minutes !== 1 ? "s" : ""}`);
       durationText = parts.join(" ");
     }
 
-    const html = `
+    const pnlDisplay = hideAmount 
+      ? `${(trade.profitPct ?? 0) >= 0 ? "+" : ""}${((trade.profitPct ?? 0) * 100).toFixed(2)}%`
+      : `${(trade.pnlAmount ?? 0) >= 0 ? "+" : ""}$${(trade.pnlAmount ?? 0).toFixed(2)}`;
+
+    return `
       <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div>
@@ -757,9 +795,7 @@ export default function Home() {
           </div>
           <div style="text-align: right;">
             <p style="margin: 0; font-size: 12px; color: #94a3b8;">P&L</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">
-              ${(trade.pnlAmount ?? 0) >= 0 ? "+" : ""}$${(trade.pnlAmount ?? 0).toFixed(2)}
-            </p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${pnlDisplay}</p>
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -773,11 +809,11 @@ export default function Home() {
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Entry</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.openPrice?.toLocaleString() || "-"}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${hideAmount ? "•••••" : `$${trade.openPrice?.toLocaleString() || "-"}`}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Exit</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.closePrice?.toLocaleString() || "-"}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${hideAmount ? "•••••" : `$${trade.closePrice?.toLocaleString() || "-"}`}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Return</p>
@@ -797,15 +833,24 @@ export default function Home() {
         </div>
       </div>
     `;
+  };
+
+  const downloadTradeCard = (trade: Trade) => {
+    setCurrentShareData({ type: "trade", data: trade });
+    setShareHideAmount(false);
+    const html = generateTradeCardHtml(trade, false);
     showShareModal(html, "closedTrade");
   };
 
-  const downloadPositionCard = (position: OpenPosition) => {
-    const pnlColor =
-      (position.unrealizedPnlPct ?? 0) >= 0 ? "#4ade80" : "#f87171";
-    const directionColor =
-      position.direction === "long" ? "#4ade80" : "#f87171";
-    const html = `
+  const generatePositionCardHtml = (position: OpenPosition, hideAmount: boolean) => {
+    const pnlColor = (position.unrealizedPnlPct ?? 0) >= 0 ? "#4ade80" : "#f87171";
+    const directionColor = position.direction === "long" ? "#4ade80" : "#f87171";
+    
+    const pnlDisplay = hideAmount 
+      ? `${(position.unrealizedPnlPct ?? 0) >= 0 ? "+" : ""}${((position.unrealizedPnlPct ?? 0) * 100).toFixed(2)}%`
+      : `${(position.unrealizedPnl ?? 0) >= 0 ? "+" : ""}$${Math.abs(position.unrealizedPnl ?? 0).toFixed(2)}`;
+
+    return `
       <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div>
@@ -814,9 +859,7 @@ export default function Home() {
           </div>
           <div style="text-align: right;">
             <p style="margin: 0; font-size: 12px; color: #94a3b8;">Unrealized P&L</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">
-              ${(position.unrealizedPnl ?? 0) >= 0 ? "+" : ""}$${Math.abs(position.unrealizedPnl ?? 0).toFixed(2)}
-            </p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${pnlDisplay}</p>
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -830,15 +873,15 @@ export default function Home() {
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Entry Price</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${position.entryPrice.toLocaleString()}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${hideAmount ? "•••••" : `$${position.entryPrice.toLocaleString()}`}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Collateral</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${position.collateral.toFixed(2)}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${hideAmount ? "•••••" : `$${position.collateral.toFixed(2)}`}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Liq. Price</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #94a3b8; font-family: monospace;">$${position.liquidationPrice?.toLocaleString() || "-"}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #94a3b8; font-family: monospace;">${hideAmount ? "•••••" : `$${position.liquidationPrice?.toLocaleString() || "-"}`}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Return</p>
@@ -847,13 +890,24 @@ export default function Home() {
         </div>
       </div>
     `;
+  };
+
+  const downloadPositionCard = (position: OpenPosition) => {
+    setCurrentShareData({ type: "position", data: position });
+    setShareHideAmount(false);
+    const html = generatePositionCardHtml(position, false);
     showShareModal(html, "openPosition");
   };
 
-  const downloadVaultCard = (position: VaultPosition) => {
+  const generateVaultCardHtml = (position: VaultPosition, hideAmount: boolean) => {
     const earningsColor = position.earnings >= 0 ? "#4ade80" : "#f87171";
     const actionColor = position.action === "deposit" ? "#4ade80" : "#fb923c";
-    const html = `
+    
+    const earningsDisplay = hideAmount 
+      ? (position.action === "withdraw" ? "Realized" : `+${position.earningsPercent.toFixed(2)}%`)
+      : (position.action === "withdraw" ? "Realized" : `${position.earnings >= 0 ? "+" : ""}$${position.earnings.toFixed(4)}`);
+
+    return `
       <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div>
@@ -862,9 +916,7 @@ export default function Home() {
           </div>
           <div style="text-align: right;">
             <p style="margin: 0; font-size: 12px; color: #94a3b8;">Earnings</p>
-            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${earningsColor}; font-family: monospace;">
-              ${position.action === "withdraw" ? "Realized" : `${position.earnings >= 0 ? "+" : ""}$${position.earnings.toFixed(4)}`}
-            </p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${earningsColor}; font-family: monospace;">${earningsDisplay}</p>
           </div>
         </div>
         <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
@@ -874,11 +926,11 @@ export default function Home() {
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Amount</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${position.depositAmount.toFixed(2)} ${position.vaultSymbol}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${hideAmount ? "•••••" : `${position.depositAmount.toFixed(2)} ${position.vaultSymbol}`}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">LP Tokens</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${position.shares.toFixed(4)}</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${hideAmount ? "•••••" : position.shares.toFixed(4)}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">APY</p>
@@ -895,6 +947,12 @@ export default function Home() {
         </div>
       </div>
     `;
+  };
+
+  const downloadVaultCard = (position: VaultPosition) => {
+    setCurrentShareData({ type: "vault", data: position });
+    setShareHideAmount(false);
+    const html = generateVaultCardHtml(position, false);
     showShareModal(html, "lpVault");
   };
 
@@ -2391,6 +2449,19 @@ export default function Home() {
                 <Download className="w-4 h-4 mr-2" />
                 Download
               </Button>
+              {shareMessageType !== "globalStats" && (
+                <Button
+                  variant={shareHideAmount ? "default" : "outline"}
+                  onClick={async () => {
+                    const newValue = !shareHideAmount;
+                    setShareHideAmount(newValue);
+                    await regenerateShareImage(newValue);
+                  }}
+                  data-testid="button-share-hide-amounts"
+                >
+                  Hide $
+                </Button>
+              )}
               <Button
                 variant="outline"
                 onClick={() => {
