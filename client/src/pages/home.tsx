@@ -599,12 +599,16 @@ export default function Home() {
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.closePrice?.toLocaleString() || "-"}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Collateral</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.collateral?.toFixed(2) || "-"}</p>
-          </div>
-          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Return</p>
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${(trade.profitPct ?? 0) >= 0 ? "+" : ""}${((trade.profitPct ?? 0) * 100).toFixed(2)}%</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Opened</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Closed</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.closeTimestamp ? new Date(trade.closeTimestamp).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}</p>
           </div>
         </div>
       </div>
