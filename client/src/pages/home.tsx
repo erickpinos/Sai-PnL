@@ -1573,7 +1573,7 @@ export default function Home() {
                 <Card>
                   <CardHeader className="flex flex-row items-center justify-between gap-2">
                     <div>
-                      <CardTitle>Trading Statistics</CardTitle>
+                      <CardTitle>Your Trading Statistics</CardTitle>
                       <CardDescription>
                         Personal trading performance metrics
                       </CardDescription>
@@ -1792,15 +1792,9 @@ export default function Home() {
                           <div className="flex items-center justify-between mb-6">
                             <div>
                               <h3 className="text-xl font-bold text-white">
-                                Sai Perps Trading Stats
+                                My Trading Stats
                               </h3>
                               <p className="text-sm text-slate-400">
-                                {searchAddress
-                                  ? addressHidden
-                                    ? "••••••••••"
-                                    : abridgeAddress(searchAddress)
-                                  : ""}{" "}
-                                •{" "}
                                 {network === "mainnet" ? "Mainnet" : "Testnet"}
                               </p>
                             </div>
@@ -1811,8 +1805,16 @@ export default function Home() {
                               <p
                                 className={`text-2xl font-bold font-mono ${(data?.totalPnl ?? 0) >= 0 ? "text-green-400" : "text-red-400"}`}
                               >
-                                {(data?.totalPnl ?? 0) >= 0 ? "+" : "-"}$
-                                {Math.abs(data?.totalPnl ?? 0).toFixed(2)}
+                                {hideStatsAmount
+                                  ? (() => {
+                                      const closedTrades = trades.filter(t => t.type === "close");
+                                      const totalCollateral = closedTrades.reduce((sum, t) => sum + (t.collateral ?? 0), 0);
+                                      const totalPnlPct = totalCollateral > 0 
+                                        ? ((data?.totalPnl ?? 0) / totalCollateral) * 100 
+                                        : 0;
+                                      return `${totalPnlPct >= 0 ? "+" : ""}${totalPnlPct.toFixed(2)}%`;
+                                    })()
+                                  : `${(data?.totalPnl ?? 0) >= 0 ? "+" : "-"}$${Math.abs(data?.totalPnl ?? 0).toFixed(2)}`}
                               </p>
                             </div>
                           </div>
@@ -2029,7 +2031,7 @@ export default function Home() {
                 <Card className="mt-4">
                   <CardHeader className="flex flex-row items-start justify-between gap-4">
                     <div>
-                      <CardTitle>Global Protocol Stats</CardTitle>
+                      <CardTitle>Global Sai Protocol Stats</CardTitle>
                       <CardDescription>
                         Global Sai Perps metrics on{" "}
                         {network === "mainnet" ? "Mainnet" : "Testnet"}
@@ -2463,7 +2465,7 @@ export default function Home() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  const text = "Check out my Sai Perps trading stats on Nibiru! 📊";
+                  const text = "Check out my Sai Perps trading stats on @SaiDotFun! 📊";
                   const url = "https://sai.fun";
                   window.open(
                     `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
