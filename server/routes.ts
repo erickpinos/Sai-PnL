@@ -86,54 +86,6 @@ const TRADES_QUERY = `
   }
 `;
 
-// Fallback query without perpBorrowing (for when API has null perpBorrowing issues)
-const TRADES_QUERY_FALLBACK = `
-  query GetTrades($trader: String!, $limit: Int, $offset: Int) {
-    perp {
-      trades(
-        where: { trader: $trader }
-        limit: $limit
-        offset: $offset
-        order_by: sequence
-        order_desc: true
-      ) {
-        id
-        trader
-        isOpen
-        isLong
-        tradeType
-        leverage
-        collateralAmount
-        openCollateralAmount
-        openPrice
-        closePrice
-        sl
-        tp
-        openBlock {
-          block
-          block_ts
-        }
-        closeBlock {
-          block
-          block_ts
-        }
-        state {
-          pnlCollateral
-          pnlPct
-          pnlCollateralAfterFees
-          positionValue
-          liquidationPrice
-          borrowingFeeCollateral
-          borrowingFeePct
-          closingFeeCollateral
-          closingFeePct
-          remainingCollateralAfterFees
-        }
-      }
-    }
-  }
-`;
-
 // GraphQL query for global protocol stats - using borrowings for open interest
 const GLOBAL_STATS_QUERY = `
   query GetGlobalStats {
@@ -238,38 +190,6 @@ const TRADE_HISTORY_QUERY = `
               symbol
             }
           }
-        }
-        realizedPnlCollateral
-        realizedPnlPct
-      }
-    }
-  }
-`;
-
-// Fallback query without perpBorrowing
-const TRADE_HISTORY_QUERY_FALLBACK = `
-  query GetTradeHistory($trader: String!, $limit: Int, $offset: Int) {
-    perp {
-      tradeHistory(
-        where: { trader: $trader }
-        limit: $limit
-        offset: $offset
-        order_by: sequence
-        order_desc: true
-      ) {
-        id
-        tradeChangeType
-        evmTxHash
-        block {
-          block
-          block_ts
-        }
-        trade {
-          id
-          isLong
-          leverage
-          openPrice
-          closePrice
         }
         realizedPnlCollateral
         realizedPnlPct
@@ -457,7 +377,7 @@ interface PerpTrade {
     collateralToken: {
       symbol: string;
     };
-  } | null;
+  };
   openBlock: {
     block: number;
     block_ts: string;
@@ -498,7 +418,7 @@ interface TradeHistoryItem {
       baseToken: {
         symbol: string;
       };
-    } | null;
+    };
   };
   realizedPnlCollateral: number | null;
   realizedPnlPct: number | null;
@@ -647,61 +567,6 @@ interface FeeTransactionsQueryResult {
   };
 }
 
-// Market info for pair inference
-interface MarketInfo {
-  symbol: string;
-  price: number;
-}
-
-// Fetch market data and create a price->pair mapping
-async function fetchMarketData(graphqlEndpoint: string): Promise<MarketInfo[]> {
-  try {
-    const response = await fetch(graphqlEndpoint, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: `{ perp { borrowings { baseToken { symbol } price } } }`
-      }),
-    });
-    const data = await response.json();
-    const borrowings = data?.data?.perp?.borrowings || [];
-    // Deduplicate by symbol
-    const seen = new Set<string>();
-    const markets: MarketInfo[] = [];
-    for (const b of borrowings) {
-      if (b.baseToken?.symbol && !seen.has(b.baseToken.symbol)) {
-        seen.add(b.baseToken.symbol);
-        markets.push({ symbol: b.baseToken.symbol, price: b.price });
-      }
-    }
-    return markets;
-  } catch (e) {
-    console.error("Failed to fetch market data:", e);
-    return [];
-  }
-}
-
-// Infer pair from entry price using market data
-function inferPairFromPrice(entryPrice: number, markets: MarketInfo[]): string {
-  if (markets.length === 0) return "Unknown";
-  
-  // Find the market with the closest price ratio (allow up to 5x difference for historical price changes)
-  let bestMatch = "Unknown";
-  let bestRatio = Infinity;
-  
-  for (const market of markets) {
-    if (market.price <= 0) continue;
-    const ratio = Math.max(entryPrice / market.price, market.price / entryPrice);
-    // Allow up to 5x difference to account for historical price changes
-    if (ratio < bestRatio && ratio < 5) {
-      bestRatio = ratio;
-      bestMatch = market.symbol;
-    }
-  }
-  
-  return bestMatch;
-}
-
 async function graphqlQuery<T>(endpoint: string, query: string, variables: Record<string, any>): Promise<T> {
   const response = await fetch(endpoint, {
     method: "POST",
@@ -714,10 +579,7 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
   const result: GraphQLResponse<T> = await response.json();
   
   if (result.errors && result.errors.length > 0) {
-    console.log("GraphQL errors:", result.errors);
-    if (!result.data) {
-      throw new Error(result.errors.map(e => e.message).join(", "));
-    }
+    throw new Error(result.errors.map(e => e.message).join(", "));
   }
   
   if (!result.data) {
@@ -728,23 +590,17 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 }
 
 // Convert GraphQL trade data to our Trade type
-function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, feeMap: Map<number, TradeFees>, markets: MarketInfo[] = []): Trade {
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, feeMap: Map<number, TradeFees>): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
     : (perpTrade.closeBlock?.block_ts || perpTrade.openBlock?.block_ts || new Date().toISOString());
   
-  // Get pair from perpBorrowing, or infer from price if not available
-  let pair = perpTrade.perpBorrowing?.baseToken?.symbol;
-  if (!pair && markets.length > 0) {
-    pair = inferPairFromPrice(perpTrade.openPrice, markets);
-  }
-  
   const trade: Trade = {
     txHash: `trade-${perpTrade.id}`,
     timestamp,
     type: isOpen ? "open" : "close",
-    pair: pair || "Unknown",
+    pair: perpTrade.perpBorrowing?.baseToken?.symbol || "Unknown",
     direction: perpTrade.isLong ? "long" : "short",
     leverage: perpTrade.leverage,
     collateral: perpTrade.openCollateralAmount / 1e6,
@@ -885,38 +741,18 @@ export async function registerRoutes(
 
     try {
       // Fetch trades and trade history from Sai Keeper GraphQL API
-      // Try main query first, fallback to query without perpBorrowing if it fails
-      let tradesResult: TradesQueryResult;
-      let historyResult: TradeHistoryQueryResult;
-      
-      try {
-        [tradesResult, historyResult] = await Promise.all([
-          graphqlQuery<TradesQueryResult>(networkConfig.graphql, TRADES_QUERY, {
-            trader: nibiAddress,
-            limit,
-            offset,
-          }),
-          graphqlQuery<TradeHistoryQueryResult>(networkConfig.graphql, TRADE_HISTORY_QUERY, {
-            trader: nibiAddress,
-            limit: limit * 2,
-            offset,
-          }),
-        ]);
-      } catch (mainQueryError) {
-        console.log("Main query failed, trying fallback without perpBorrowing...");
-        [tradesResult, historyResult] = await Promise.all([
-          graphqlQuery<TradesQueryResult>(networkConfig.graphql, TRADES_QUERY_FALLBACK, {
-            trader: nibiAddress,
-            limit,
-            offset,
-          }),
-          graphqlQuery<TradeHistoryQueryResult>(networkConfig.graphql, TRADE_HISTORY_QUERY_FALLBACK, {
-            trader: nibiAddress,
-            limit: limit * 2,
-            offset,
-          }),
-        ]);
-      }
+      const [tradesResult, historyResult] = await Promise.all([
+        graphqlQuery<TradesQueryResult>(networkConfig.graphql, TRADES_QUERY, {
+          trader: nibiAddress,
+          limit,
+          offset,
+        }),
+        graphqlQuery<TradeHistoryQueryResult>(networkConfig.graphql, TRADE_HISTORY_QUERY, {
+          trader: nibiAddress,
+          limit: limit * 2,
+          offset,
+        }),
+      ]);
       
       // Collect transaction hashes for RPC fee extraction
       const txHashesForFees: { tradeId: number; evmTxHash: string; isOpening: boolean }[] = [];
@@ -1024,9 +860,7 @@ export async function registerRoutes(
       const bech32Address = evmToBech32(address);
       console.log(`Fetching open positions for ${address} (${bech32Address}) on ${network}`);
 
-      // Query open trades - try main query first, fallback if perpBorrowing is null
-      let tradesData: GraphQLResponse<TradesQueryResult>;
-      
+      // Query open trades
       const tradesResponse = await fetch(networkConfig.graphql, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -1036,22 +870,9 @@ export async function registerRoutes(
         }),
       });
 
-      tradesData = await tradesResponse.json() as GraphQLResponse<TradesQueryResult>;
+      const tradesData = await tradesResponse.json() as GraphQLResponse<TradesQueryResult>;
       
-      if (tradesData.errors && !tradesData.data) {
-        console.log("Main positions query failed, trying fallback...");
-        const fallbackResponse = await fetch(networkConfig.graphql, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            query: TRADES_QUERY_FALLBACK,
-            variables: { trader: bech32Address, limit: 100, offset: 0 },
-          }),
-        });
-        tradesData = await fallbackResponse.json() as GraphQLResponse<TradesQueryResult>;
-      }
-      
-      if (tradesData.errors && !tradesData.data) {
+      if (tradesData.errors) {
         console.error("GraphQL errors:", tradesData.errors);
         return res.status(500).json({ error: "Failed to fetch positions" });
       }
