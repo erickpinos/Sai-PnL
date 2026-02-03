@@ -83,6 +83,7 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-02-03: Added hide address toggle (eye icon) in top right header to mask wallet addresses with dots
 - 2026-02-03: Changed all Download buttons to Share buttons that open a modal with the generated image for right-click saving
 - 2026-02-02: Added Total Trading Volume to Protocol Stats (shows "Coming Soon" - API doesn't expose volume data yet)
 - 2026-01-31: Added closed vault positions (withdrawals) to "My Vaults" tab with distinct styling

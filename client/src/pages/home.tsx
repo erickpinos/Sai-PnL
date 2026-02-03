@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2, Share2 } from "lucide-react";
+import { Search, TrendingUp, TrendingDown, Activity, Loader2, Wallet, ChevronDown, Target, ShieldAlert, Link2, Share2, Eye, EyeOff } from "lucide-react";
 import html2canvas from "html2canvas";
 
 declare global {
@@ -421,6 +421,7 @@ export default function Home() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
+  const [addressHidden, setAddressHidden] = useState(false);
   const statsCardRef = useRef<HTMLDivElement>(null);
   
   const form = useForm<AddressForm>({
@@ -831,7 +832,7 @@ export default function Home() {
                 <DropdownMenuTrigger asChild>
                   <Button variant="outline" size="sm" className="font-mono text-xs gap-2" data-testid="button-wallet-connected">
                     <div className="w-2 h-2 rounded-full bg-emerald-500" />
-                    {abridgeAddress(connectedWallet)}
+                    {addressHidden ? "••••••••••" : abridgeAddress(connectedWallet)}
                     <ChevronDown className="h-3 w-3" />
                   </Button>
                 </DropdownMenuTrigger>
@@ -857,6 +858,18 @@ export default function Home() {
                   <Link2 className="h-4 w-4 mr-2" />
                 )}
                 Connect Wallet
+              </Button>
+            )}
+            {/* Hide Address Toggle */}
+            {searchAddress && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setAddressHidden(!addressHidden)}
+                title={addressHidden ? "Show address" : "Hide address"}
+                data-testid="button-toggle-address-visibility"
+              >
+                {addressHidden ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
               </Button>
             )}
           </div>
@@ -984,7 +997,7 @@ export default function Home() {
                     <CardDescription>
                       {searchAddress && (
                         <span className="font-mono text-xs">
-                          {searchAddress.slice(0, 6)}...{searchAddress.slice(-4)}
+                          {addressHidden ? "••••••••••" : `${searchAddress.slice(0, 6)}...${searchAddress.slice(-4)}`}
                         </span>
                       )}
                     </CardDescription>
@@ -1314,7 +1327,7 @@ export default function Home() {
                           <div className="flex items-center justify-between mb-6">
                             <div>
                               <h3 className="text-xl font-bold text-white">Sai Perps Trading Stats</h3>
-                              <p className="text-sm text-slate-400">{searchAddress ? abridgeAddress(searchAddress) : ""} • {network === "mainnet" ? "Mainnet" : "Testnet"}</p>
+                              <p className="text-sm text-slate-400">{searchAddress ? (addressHidden ? "••••••••••" : abridgeAddress(searchAddress)) : ""} • {network === "mainnet" ? "Mainnet" : "Testnet"}</p>
                             </div>
                             <div className="text-right">
                               <p className="text-sm text-slate-400">Total PnL</p>
