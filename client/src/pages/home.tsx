@@ -543,7 +543,7 @@ export default function Home() {
     container.innerHTML = htmlContent;
     container.style.position = "absolute";
     container.style.left = "-9999px";
-    container.style.width = "400px";
+    container.style.width = "520px";
     document.body.appendChild(container);
 
     try {
