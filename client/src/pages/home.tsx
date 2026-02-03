@@ -2412,32 +2412,6 @@ export default function Home() {
             <DialogTitle>Share Your Trading Stats</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4">
-            <div className="flex items-center gap-2">
-              <Button
-                variant={hideStatsAmount ? "default" : "outline"}
-                size="sm"
-                onClick={async () => {
-                  const newValue = !hideStatsAmount;
-                  setHideStatsAmount(newValue);
-                  // Regenerate image after state update
-                  setTimeout(async () => {
-                    if (statsCardRef.current) {
-                      const canvas = await html2canvas(statsCardRef.current, {
-                        backgroundColor: "#1a1a2e",
-                        scale: 2,
-                        logging: false,
-                        useCORS: true,
-                      });
-                      setStatsImageUrl(canvas.toDataURL("image/png"));
-                    }
-                  }, 50);
-                }}
-                data-testid="button-toggle-hide-amounts"
-              >
-                <DollarSign className="w-4 h-4 mr-1" />
-                {hideStatsAmount ? "$ Hidden" : "Hide $"}
-              </Button>
-            </div>
             {statsImageUrl && (
               <img
                 src={statsImageUrl}
@@ -2462,6 +2436,28 @@ export default function Home() {
               >
                 <Download className="w-4 h-4 mr-2" />
                 Download
+              </Button>
+              <Button
+                variant={hideStatsAmount ? "default" : "outline"}
+                onClick={async () => {
+                  const newValue = !hideStatsAmount;
+                  setHideStatsAmount(newValue);
+                  setTimeout(async () => {
+                    if (statsCardRef.current) {
+                      const canvas = await html2canvas(statsCardRef.current, {
+                        backgroundColor: "#1a1a2e",
+                        scale: 2,
+                        logging: false,
+                        useCORS: true,
+                      });
+                      setStatsImageUrl(canvas.toDataURL("image/png"));
+                    }
+                  }, 50);
+                }}
+                data-testid="button-toggle-hide-amounts"
+              >
+                <DollarSign className="w-4 h-4 mr-2" />
+                {hideStatsAmount ? "$ Hidden" : "Hide $"}
               </Button>
               <Button
                 variant="outline"
