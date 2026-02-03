@@ -567,6 +567,24 @@ export default function Home() {
   const downloadTradeCard = (trade: Trade) => {
     const pnlColor = (trade.pnlAmount ?? 0) >= 0 ? "#4ade80" : "#f87171";
     const directionColor = trade.direction === "long" ? "#4ade80" : "#f87171";
+    
+    // Calculate duration
+    let durationText = "-";
+    if (trade.openTimestamp && trade.closeTimestamp) {
+      const openDate = new Date(trade.openTimestamp);
+      const closeDate = new Date(trade.closeTimestamp);
+      const diffMs = closeDate.getTime() - openDate.getTime();
+      const days = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+      const hours = Math.floor((diffMs % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+      const minutes = Math.floor((diffMs % (1000 * 60 * 60)) / (1000 * 60));
+      
+      const parts = [];
+      if (days > 0) parts.push(`${days} day${days !== 1 ? "s" : ""}`);
+      if (hours > 0) parts.push(`${hours} hour${hours !== 1 ? "s" : ""}`);
+      if (minutes > 0 || parts.length === 0) parts.push(`${minutes} minute${minutes !== 1 ? "s" : ""}`);
+      durationText = parts.join(" ");
+    }
+    
     const html = `
       <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
         <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
@@ -604,12 +622,15 @@ export default function Home() {
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Opened</p>
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "-"}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Closed</p>
-            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.closeTimestamp ? new Date(trade.closeTimestamp).toLocaleString(undefined, { month: "short", day: "numeric", year: "numeric", hour: "2-digit", minute: "2-digit" }) : "-"}</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.closeTimestamp ? new Date(trade.closeTimestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "-"}</p>
           </div>
+        </div>
+        <div style="margin-top: 12px; padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8); text-align: center;">
+          <p style="margin: 0; font-size: 13px; color: #94a3b8;">Position was open for <span style="color: white; font-weight: bold;">${durationText}</span></p>
         </div>
       </div>
     `;
