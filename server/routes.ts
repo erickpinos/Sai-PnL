@@ -647,6 +647,61 @@ interface FeeTransactionsQueryResult {
   };
 }
 
+// Market info for pair inference
+interface MarketInfo {
+  symbol: string;
+  price: number;
+}
+
+// Fetch market data and create a price->pair mapping
+async function fetchMarketData(graphqlEndpoint: string): Promise<MarketInfo[]> {
+  try {
+    const response = await fetch(graphqlEndpoint, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `{ perp { borrowings { baseToken { symbol } price } } }`
+      }),
+    });
+    const data = await response.json();
+    const borrowings = data?.data?.perp?.borrowings || [];
+    // Deduplicate by symbol
+    const seen = new Set<string>();
+    const markets: MarketInfo[] = [];
+    for (const b of borrowings) {
+      if (b.baseToken?.symbol && !seen.has(b.baseToken.symbol)) {
+        seen.add(b.baseToken.symbol);
+        markets.push({ symbol: b.baseToken.symbol, price: b.price });
+      }
+    }
+    return markets;
+  } catch (e) {
+    console.error("Failed to fetch market data:", e);
+    return [];
+  }
+}
+
+// Infer pair from entry price using market data
+function inferPairFromPrice(entryPrice: number, markets: MarketInfo[]): string {
+  if (markets.length === 0) return "Unknown";
+  
+  // Find the market with the closest price ratio (allow up to 5x difference for historical price changes)
+  let bestMatch = "Unknown";
+  let bestRatio = Infinity;
+  
+  for (const market of markets) {
+    if (market.price <= 0) continue;
+    const ratio = Math.max(entryPrice / market.price, market.price / entryPrice);
+    // Allow up to 5x difference to account for historical price changes
+    if (ratio < bestRatio && ratio < 5) {
+      bestRatio = ratio;
+      bestMatch = market.symbol;
+    }
+  }
+  
+  return bestMatch;
+}
+
 async function graphqlQuery<T>(endpoint: string, query: string, variables: Record<string, any>): Promise<T> {
   const response = await fetch(endpoint, {
     method: "POST",
@@ -673,17 +728,23 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 }
 
 // Convert GraphQL trade data to our Trade type
-function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, feeMap: Map<number, TradeFees>): Trade {
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, feeMap: Map<number, TradeFees>, markets: MarketInfo[] = []): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
     : (perpTrade.closeBlock?.block_ts || perpTrade.openBlock?.block_ts || new Date().toISOString());
   
+  // Get pair from perpBorrowing, or infer from price if not available
+  let pair = perpTrade.perpBorrowing?.baseToken?.symbol;
+  if (!pair && markets.length > 0) {
+    pair = inferPairFromPrice(perpTrade.openPrice, markets);
+  }
+  
   const trade: Trade = {
     txHash: `trade-${perpTrade.id}`,
     timestamp,
     type: isOpen ? "open" : "close",
-    pair: perpTrade.perpBorrowing?.baseToken?.symbol || "Unknown",
+    pair: pair || "Unknown",
     direction: perpTrade.isLong ? "long" : "short",
     leverage: perpTrade.leverage,
     collateral: perpTrade.openCollateralAmount / 1e6,
