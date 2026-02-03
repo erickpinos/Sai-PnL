@@ -19,7 +19,6 @@ import {
   EyeOff,
   Download,
   Twitter,
-  DollarSign,
 } from "lucide-react";
 import html2canvas from "html2canvas";
 
@@ -2456,8 +2455,7 @@ export default function Home() {
                 }}
                 data-testid="button-toggle-hide-amounts"
               >
-                <DollarSign className="w-4 h-4 mr-2" />
-                {hideStatsAmount ? "$ Hidden" : "Hide $"}
+                Hide $
               </Button>
               <Button
                 variant="outline"
