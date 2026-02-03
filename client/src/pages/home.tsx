@@ -1464,8 +1464,15 @@ export default function Home() {
                 <Card className="mt-4">
                   <CardHeader className="flex flex-row items-start justify-between gap-4">
                     <div>
-                      <CardTitle>Protocol Stats</CardTitle>
-                      <CardDescription>Global Sai Perps metrics on {network === "mainnet" ? "Mainnet" : "Testnet"}</CardDescription>
+                      <CardTitle>Global Protocol Stats</CardTitle>
+                      <CardDescription>
+                        Global Sai Perps metrics on {network === "mainnet" ? "Mainnet" : "Testnet"}
+                        {volumeData?.lastUpdated && (
+                          <span className="ml-2 text-xs">
+                            • Updated: {new Date(volumeData.lastUpdated).toLocaleString()}
+                          </span>
+                        )}
+                      </CardDescription>
                     </div>
                     {globalStatsData?.stats && (
                       <Button
@@ -1533,11 +1540,6 @@ export default function Home() {
                                 ? `$${volumeData.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
                                 : "Loading..."}
                             </p>
-                            {volumeData?.lastUpdated && (
-                              <p className="text-xs text-muted-foreground mt-1">
-                                Updated: {new Date(volumeData.lastUpdated).toLocaleString()}
-                              </p>
-                            )}
                           </div>
                           <div className="p-4 rounded-lg bg-muted/50">
                             <p className="text-sm text-muted-foreground mb-1">Total Trades</p>
