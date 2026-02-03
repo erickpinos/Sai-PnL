@@ -220,6 +220,136 @@ const FEE_TRANSACTIONS_QUERY = `
   }
 `;
 
+// GraphQL query for all trade history (global volume calculation)
+// Using tradeHistory which doesn't require a trader filter
+const ALL_TRADE_HISTORY_QUERY = `
+  query GetAllTradeHistory($limit: Int, $offset: Int) {
+    perp {
+      tradeHistory(
+        limit: $limit
+        offset: $offset
+        order_by: sequence
+        order_desc: true
+      ) {
+        id
+        tradeChangeType
+        trade {
+          id
+          collateralAmount
+          openCollateralAmount
+          leverage
+        }
+      }
+    }
+  }
+`;
+
+// In-memory cache for global trading volume
+interface VolumeCache {
+  mainnet: {
+    totalVolume: number;
+    tradeCount: number;
+    lastUpdated: string | null;
+  };
+  testnet: {
+    totalVolume: number;
+    tradeCount: number;
+    lastUpdated: string | null;
+  };
+}
+
+const volumeCache: VolumeCache = {
+  mainnet: { totalVolume: 0, tradeCount: 0, lastUpdated: null },
+  testnet: { totalVolume: 0, tradeCount: 0, lastUpdated: null },
+};
+
+// Fetch all trade history and calculate total volume
+async function fetchGlobalVolume(network: "mainnet" | "testnet"): Promise<void> {
+  const config = NETWORKS[network];
+  let totalVolume = 0;
+  let tradeCount = 0;
+  let offset = 0;
+  const batchSize = 1000;
+  const seenTradeIds = new Set<number>();
+  
+  console.log(`[Volume] Starting global volume fetch for ${network}...`);
+  
+  try {
+    while (true) {
+      const response = await fetch(config.graphql, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: ALL_TRADE_HISTORY_QUERY,
+          variables: { limit: batchSize, offset },
+        }),
+      });
+      
+      const result: GraphQLResponse<{ perp: { tradeHistory: Array<{ 
+        id: number; 
+        tradeChangeType: string;
+        trade: { id: number; collateralAmount: number; openCollateralAmount: number; leverage: number } | null 
+      }> } }> = await response.json();
+      
+      if (result.errors || !result.data?.perp?.tradeHistory) {
+        console.error(`[Volume] Error fetching trade history for ${network}:`, result.errors);
+        // Keep previous cache value on error instead of zeroing out
+        return;
+      }
+      
+      const historyItems = result.data.perp.tradeHistory;
+      if (historyItems.length === 0) break;
+      
+      for (const item of historyItems) {
+        // Count unique trades for position opening events (position_opened includes market/limit/trigger orders)
+        const isOpeningEvent = item.tradeChangeType === "position_opened";
+        if (item.trade && isOpeningEvent && !seenTradeIds.has(item.trade.id)) {
+          seenTradeIds.add(item.trade.id);
+          // Volume = collateral * leverage (position size at opening)
+          const collateral = item.trade.openCollateralAmount || item.trade.collateralAmount;
+          const positionSize = (collateral / 1e6) * item.trade.leverage;
+          totalVolume += positionSize;
+          tradeCount++;
+        }
+      }
+      
+      offset += batchSize;
+      
+      // Safety limit - don't fetch more than 100k history entries
+      if (offset >= 100000) {
+        console.log(`[Volume] Reached safety limit of 100k entries for ${network}`);
+        break;
+      }
+    }
+    
+    volumeCache[network] = {
+      totalVolume,
+      tradeCount,
+      lastUpdated: new Date().toISOString(),
+    };
+    
+    console.log(`[Volume] ${network} volume updated: $${totalVolume.toLocaleString()} from ${tradeCount} trades`);
+  } catch (error) {
+    console.error(`[Volume] Failed to fetch global volume for ${network}:`, error);
+  }
+}
+
+// Initialize volume cache on startup and set up 8-hour refresh
+async function initializeVolumeCache(): Promise<void> {
+  console.log("[Volume] Initializing volume cache...");
+  await Promise.all([
+    fetchGlobalVolume("mainnet"),
+    fetchGlobalVolume("testnet"),
+  ]);
+  
+  // Refresh every 8 hours (8 * 60 * 60 * 1000 = 28800000 ms)
+  setInterval(() => {
+    console.log("[Volume] Running scheduled 8-hour refresh...");
+    fetchGlobalVolume("mainnet");
+    fetchGlobalVolume("testnet");
+  }, 8 * 60 * 60 * 1000);
+}
+
 interface GraphQLResponse<T> {
   data?: T;
   errors?: Array<{ message: string }>;
@@ -561,6 +691,27 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express
 ): Promise<Server> {
+  
+  // Initialize volume cache on startup
+  initializeVolumeCache();
+  
+  // API endpoint for global trading volume
+  app.get("/api/protocol-stats/volume", (req, res) => {
+    const network = (req.query.network as string) || "mainnet";
+    
+    if (network !== "mainnet" && network !== "testnet") {
+      return res.status(400).json({ error: "Invalid network. Use 'mainnet' or 'testnet'" });
+    }
+    
+    const cache = volumeCache[network];
+    
+    res.json({
+      totalVolume: cache.totalVolume,
+      tradeCount: cache.tradeCount,
+      lastUpdated: cache.lastUpdated,
+      network,
+    });
+  });
   
   app.get("/api/trades", async (req, res) => {
     const address = req.query.address as string;

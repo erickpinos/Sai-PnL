@@ -776,6 +776,15 @@ export default function Home() {
     },
   });
 
+  const { data: volumeData } = useQuery<{ totalVolume: number; tradeCount: number; lastUpdated: string | null }>({
+    queryKey: ["/api/protocol-stats/volume", network],
+    queryFn: async () => {
+      const res = await fetch(`/api/protocol-stats/volume?network=${network}`);
+      if (!res.ok) throw new Error("Failed to fetch volume data");
+      return res.json();
+    },
+  });
+
   const isSearching = isFetching || positionsFetching;
 
   const trades = data?.trades || [];
@@ -1515,6 +1524,27 @@ export default function Home() {
                               {globalStatsData.stats.shortOpenInterest > 0 
                                 ? (globalStatsData.stats.longOpenInterest / globalStatsData.stats.shortOpenInterest).toFixed(2)
                                 : globalStatsData.stats.longOpenInterest > 0 ? "∞" : "-"}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Total Trading Volume</p>
+                            <p className="text-xl font-bold font-mono">
+                              {volumeData?.totalVolume 
+                                ? `$${volumeData.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                                : "Loading..."}
+                            </p>
+                            {volumeData?.lastUpdated && (
+                              <p className="text-xs text-muted-foreground mt-1">
+                                Updated: {new Date(volumeData.lastUpdated).toLocaleString()}
+                              </p>
+                            )}
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">Total Trades</p>
+                            <p className="text-xl font-bold font-mono">
+                              {volumeData?.tradeCount 
+                                ? volumeData.tradeCount.toLocaleString()
+                                : "Loading..."}
                             </p>
                           </div>
                         </div>
