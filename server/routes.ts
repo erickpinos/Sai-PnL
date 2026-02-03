@@ -377,7 +377,7 @@ interface PerpTrade {
     collateralToken: {
       symbol: string;
     };
-  };
+  } | null;
   openBlock: {
     block: number;
     block_ts: string;
@@ -418,7 +418,7 @@ interface TradeHistoryItem {
       baseToken: {
         symbol: string;
       };
-    };
+    } | null;
   };
   realizedPnlCollateral: number | null;
   realizedPnlPct: number | null;
