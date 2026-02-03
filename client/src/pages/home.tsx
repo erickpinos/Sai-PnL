@@ -21,6 +21,7 @@ import {
   Twitter,
 } from "lucide-react";
 import html2canvas from "html2canvas";
+import { SHARE_MESSAGES, SHARE_URL } from "@/config/shareMessages";
 
 declare global {
   interface Window {
@@ -575,6 +576,7 @@ export default function Home() {
   const [isDownloading, setIsDownloading] = useState(false);
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
+  const [shareMessageType, setShareMessageType] = useState<keyof typeof SHARE_MESSAGES>("closedTrade");
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [statsImageUrl, setStatsImageUrl] = useState<string | null>(null);
   const [hideStatsAmount, setHideStatsAmount] = useState(false);
@@ -692,10 +694,10 @@ export default function Home() {
       </div>
     `;
 
-    await showShareModal(html);
+    await showShareModal(html, "globalStats");
   };
 
-  const showShareModal = async (htmlContent: string) => {
+  const showShareModal = async (htmlContent: string, messageType: keyof typeof SHARE_MESSAGES) => {
     const container = document.createElement("div");
     container.innerHTML = htmlContent;
     container.style.position = "absolute";
@@ -713,6 +715,7 @@ export default function Home() {
 
       const imageUrl = canvas.toDataURL("image/png");
       setShareImageUrl(imageUrl);
+      setShareMessageType(messageType);
       setShareModalOpen(true);
     } catch (error) {
       console.error("Failed to generate share image:", error);
@@ -794,7 +797,7 @@ export default function Home() {
         </div>
       </div>
     `;
-    showShareModal(html);
+    showShareModal(html, "closedTrade");
   };
 
   const downloadPositionCard = (position: OpenPosition) => {
@@ -844,7 +847,7 @@ export default function Home() {
         </div>
       </div>
     `;
-    showShareModal(html);
+    showShareModal(html, "openPosition");
   };
 
   const downloadVaultCard = (position: VaultPosition) => {
@@ -892,7 +895,7 @@ export default function Home() {
         </div>
       </div>
     `;
-    showShareModal(html);
+    showShareModal(html, "lpVault");
   };
 
   const abridgeAddress = (address: string) => {
@@ -2391,10 +2394,9 @@ export default function Home() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  const text = "Check out my Sai Perps trade on Nibiru! 🚀";
-                  const url = "https://sai.fun";
+                  const text = SHARE_MESSAGES[shareMessageType];
                   window.open(
-                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(SHARE_URL)}`,
                     "_blank",
                     "width=550,height=420",
                   );
@@ -2465,10 +2467,8 @@ export default function Home() {
               <Button
                 variant="outline"
                 onClick={() => {
-                  const text = "Check out my Sai Perps trading stats on @SaiDotFun! 📊";
-                  const url = "https://sai.fun";
                   window.open(
-                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
+                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(SHARE_MESSAGES.tradingStats)}&url=${encodeURIComponent(SHARE_URL)}`,
                     "_blank",
                     "width=550,height=420",
                   );
