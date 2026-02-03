@@ -684,7 +684,7 @@ export default function Home() {
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${lsRatio}</p>
           </div>
         </div>
-        <p style="margin: 16px 0 0 0; text-align: center; font-size: 11px; color: #64748b;">sai.nibiru.fi • ${new Date().toLocaleDateString()}</p>
+        <p style="margin: 16px 0 0 0; text-align: center; font-size: 11px; color: #64748b;">sai.fun • ${new Date().toLocaleDateString()}</p>
       </div>
     `;
 
@@ -2356,7 +2356,7 @@ export default function Home() {
                 variant="outline"
                 onClick={() => {
                   const text = "Check out my Sai Perps trade on Nibiru! 🚀";
-                  const url = "https://sai.nibiru.fi";
+                  const url = "https://sai.fun";
                   window.open(
                     `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
                     "_blank",
@@ -2409,7 +2409,7 @@ export default function Home() {
                 variant="outline"
                 onClick={() => {
                   const text = "Check out my Sai Perps trading stats on Nibiru! 📊";
-                  const url = "https://sai.nibiru.fi";
+                  const url = "https://sai.fun";
                   window.open(
                     `https://twitter.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`,
                     "_blank",

@@ -2,6 +2,8 @@
 
 A web application for tracking profit and loss on Sai Perps trades on Nibiru.
 
+**Website URL:** https://sai.fun
+
 ## Overview
 
 This application allows users to connect their wallet (MetaMask/Rabby) or enter a Nibiru EVM address (0x format) to view their Sai Perps trading history with detailed profit/loss information per trade.
