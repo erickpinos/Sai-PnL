@@ -60,6 +60,16 @@ This application allows users to connect their wallet (MetaMask/Rabby) or enter 
 ### GraphQL Queries
 - `trades` query: Returns trade list with open/close status, prices, leverage
 - `tradeHistory` query: Returns `realizedPnlPct`, `realizedPnlCollateral`, and `evmTxHash` for closed trades
+- `borrowings` query: Returns all markets with prices (used for matching trades to pairs)
+
+### Market Matching Workaround
+**NOTE:** The Sai Keeper API has a bug where `perpBorrowing` fails for some trades with broken market references. To work around this:
+1. We do NOT request `perpBorrowing` in the trades/tradeHistory queries
+2. We separately query all markets via the `borrowings` endpoint
+3. We match trades to markets by price (within 10% tolerance)
+4. Trades that don't match any market show "Unknown" as the pair
+
+**TODO:** When the Sai Keeper API fixes the `perpBorrowing` issue, re-add `perpBorrowing` to the trades query for more accurate market matching. Look for `TODO: Re-add perpBorrowing` comments in `server/routes.ts`.
 
 ### PnL Data Sources
 - For closed trades: `realizedPnlPct` from `tradeHistory` query
@@ -85,6 +95,7 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-02-03: Fixed perpBorrowing API issue by fetching markets separately and matching trades by price
 - 2026-02-03: Added hide address toggle (eye icon) in top right header to mask wallet addresses with dots
 - 2026-02-03: Changed all Download buttons to Share buttons that open a modal with the generated image for right-click saving
 - 2026-02-02: Added Total Trading Volume to Protocol Stats (shows "Coming Soon" - API doesn't expose volume data yet)

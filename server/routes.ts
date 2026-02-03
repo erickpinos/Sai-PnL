@@ -29,6 +29,9 @@ function evmToBech32(evmAddress: string): string {
 }
 
 // GraphQL query for trades
+// NOTE: perpBorrowing is intentionally excluded because the API fails for some trades
+// that have broken perpBorrowing references. We fetch markets separately and match by price.
+// TODO: Re-add perpBorrowing when the Sai Keeper API is fixed.
 const TRADES_QUERY = `
   query GetTrades($trader: String!, $limit: Int, $offset: Int) {
     perp {
@@ -51,16 +54,6 @@ const TRADES_QUERY = `
         closePrice
         sl
         tp
-        perpBorrowing {
-          marketId
-          baseToken {
-            symbol
-            name
-          }
-          collateralToken {
-            symbol
-          }
-        }
         openBlock {
           block
           block_ts
@@ -85,6 +78,62 @@ const TRADES_QUERY = `
     }
   }
 `;
+
+// GraphQL query for all markets (borrowings) - fetched separately to match with trades
+const MARKETS_QUERY = `
+  query GetMarkets {
+    perp {
+      borrowings(limit: 100) {
+        marketId
+        baseToken {
+          symbol
+          name
+        }
+        collateralToken {
+          symbol
+        }
+        price
+      }
+    }
+  }
+`;
+
+interface Market {
+  marketId: string;
+  baseToken: { symbol: string; name: string };
+  collateralToken: { symbol: string };
+  price: number;
+}
+
+interface MarketsQueryResult {
+  perp: {
+    borrowings: Market[];
+  };
+}
+
+// Match a trade to a market by price (approximate matching)
+// Finds the closest market by absolute price difference within 10% tolerance
+// Uses marketId as tie-breaker for deterministic results
+function matchTradeToMarket(openPrice: number, markets: Market[]): Market | null {
+  let bestMatch: Market | null = null;
+  let bestDiff = Infinity;
+  
+  for (const market of markets) {
+    const priceDiff = Math.abs(market.price - openPrice);
+    const tolerance = market.price * 0.1; // 10% tolerance
+    
+    // Only consider markets within tolerance
+    if (priceDiff < tolerance) {
+      // Use strictly less than, or equal diff with lower marketId for determinism
+      if (priceDiff < bestDiff || (priceDiff === bestDiff && bestMatch && market.marketId < bestMatch.marketId)) {
+        bestMatch = market;
+        bestDiff = priceDiff;
+      }
+    }
+  }
+  
+  return bestMatch;
+}
 
 // GraphQL query for global protocol stats - using borrowings for open interest
 const GLOBAL_STATS_QUERY = `
@@ -162,6 +211,7 @@ const VAULT_POSITIONS_QUERY = `
 `;
 
 // GraphQL query for trade history (for realized P&L on closed trades)
+// NOTE: perpBorrowing is intentionally excluded - we match by price instead
 const TRADE_HISTORY_QUERY = `
   query GetTradeHistory($trader: String!, $limit: Int, $offset: Int) {
     perp {
@@ -185,11 +235,6 @@ const TRADE_HISTORY_QUERY = `
           leverage
           openPrice
           closePrice
-          perpBorrowing {
-            baseToken {
-              symbol
-            }
-          }
         }
         realizedPnlCollateral
         realizedPnlPct
@@ -368,16 +413,6 @@ interface PerpTrade {
   closePrice: number | null;
   sl: number | null;
   tp: number | null;
-  perpBorrowing: {
-    marketId: number;
-    baseToken: {
-      symbol: string;
-      name: string;
-    };
-    collateralToken: {
-      symbol: string;
-    };
-  };
   openBlock: {
     block: number;
     block_ts: string;
@@ -414,11 +449,6 @@ interface TradeHistoryItem {
     leverage: number;
     openPrice: number;
     closePrice: number | null;
-    perpBorrowing: {
-      baseToken: {
-        symbol: string;
-      };
-    };
   };
   realizedPnlCollateral: number | null;
   realizedPnlPct: number | null;
@@ -590,17 +620,20 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 }
 
 // Convert GraphQL trade data to our Trade type
-function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, feeMap: Map<number, TradeFees>): Trade {
+function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, feeMap: Map<number, TradeFees>, markets: Market[]): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
     : (perpTrade.closeBlock?.block_ts || perpTrade.openBlock?.block_ts || new Date().toISOString());
   
+  // Match trade to market by price
+  const matchedMarket = matchTradeToMarket(perpTrade.openPrice, markets);
+  
   const trade: Trade = {
     txHash: `trade-${perpTrade.id}`,
     timestamp,
     type: isOpen ? "open" : "close",
-    pair: perpTrade.perpBorrowing?.baseToken?.symbol || "Unknown",
+    pair: matchedMarket?.baseToken?.symbol || "Unknown",
     direction: perpTrade.isLong ? "long" : "short",
     leverage: perpTrade.leverage,
     collateral: perpTrade.openCollateralAmount / 1e6,
@@ -654,18 +687,21 @@ function convertTrade(perpTrade: PerpTrade, pnlMap: Map<number, { pnlPct: number
 }
 
 // Convert trade history item to our Trade type (for closed trades with realized P&L)
-function convertTradeHistoryItem(item: TradeHistoryItem): Trade | null {
+function convertTradeHistoryItem(item: TradeHistoryItem, markets: Market[]): Trade | null {
   // Only process close events
   const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
   if (!closeTypes.includes(item.tradeChangeType)) {
     return null;
   }
   
+  // Match trade to market by price
+  const matchedMarket = matchTradeToMarket(item.trade.openPrice, markets);
+  
   const trade: Trade = {
     txHash: `history-${item.id}`,
     timestamp: item.block.block_ts,
     type: "close",
-    pair: item.trade.perpBorrowing?.baseToken?.symbol || "Unknown",
+    pair: matchedMarket?.baseToken?.symbol || "Unknown",
     direction: item.trade.isLong ? "long" : "short",
     leverage: item.trade.leverage,
     openPrice: item.trade.openPrice,
@@ -740,8 +776,9 @@ export async function registerRoutes(
     console.log(`Converting ${address} to ${nibiAddress}`);
 
     try {
-      // Fetch trades and trade history from Sai Keeper GraphQL API
-      const [tradesResult, historyResult] = await Promise.all([
+      // Fetch trades, trade history, and markets from Sai Keeper GraphQL API
+      // Markets are fetched separately to avoid API failures when perpBorrowing is broken
+      const [tradesResult, historyResult, marketsResult] = await Promise.all([
         graphqlQuery<TradesQueryResult>(networkConfig.graphql, TRADES_QUERY, {
           trader: nibiAddress,
           limit,
@@ -752,7 +789,10 @@ export async function registerRoutes(
           limit: limit * 2,
           offset,
         }),
+        graphqlQuery<MarketsQueryResult>(networkConfig.graphql, MARKETS_QUERY, {}),
       ]);
+      
+      const markets = marketsResult.perp.borrowings;
       
       // Collect transaction hashes for RPC fee extraction
       const txHashesForFees: { tradeId: number; evmTxHash: string; isOpening: boolean }[] = [];
@@ -800,7 +840,7 @@ export async function registerRoutes(
       
       // First, add trades from the trades query (includes open positions)
       for (const perpTrade of tradesResult.perp.trades) {
-        const trade = convertTrade(perpTrade, pnlMap, feeMap);
+        const trade = convertTrade(perpTrade, pnlMap, feeMap, markets);
         trades.push(trade);
         seenTradeIds.add(perpTrade.id);
       }
@@ -808,7 +848,7 @@ export async function registerRoutes(
       // Add closed trades from history that might not be in the trades list
       for (const historyItem of historyResult.perp.tradeHistory) {
         if (!seenTradeIds.has(historyItem.trade.id)) {
-          const trade = convertTradeHistoryItem(historyItem);
+          const trade = convertTradeHistoryItem(historyItem, markets);
           if (trade) {
             trades.push(trade);
             seenTradeIds.add(historyItem.trade.id);
@@ -860,17 +900,28 @@ export async function registerRoutes(
       const bech32Address = evmToBech32(address);
       console.log(`Fetching open positions for ${address} (${bech32Address}) on ${network}`);
 
-      // Query open trades
-      const tradesResponse = await fetch(networkConfig.graphql, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          query: TRADES_QUERY,
-          variables: { trader: bech32Address, limit: 100, offset: 0 },
+      // Query open trades and markets in parallel
+      const [tradesResponse, marketsResponse] = await Promise.all([
+        fetch(networkConfig.graphql, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: TRADES_QUERY,
+            variables: { trader: bech32Address, limit: 100, offset: 0 },
+          }),
         }),
-      });
+        fetch(networkConfig.graphql, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            query: MARKETS_QUERY,
+            variables: {},
+          }),
+        }),
+      ]);
 
       const tradesData = await tradesResponse.json() as GraphQLResponse<TradesQueryResult>;
+      const marketsData = await marketsResponse.json() as GraphQLResponse<MarketsQueryResult>;
       
       if (tradesData.errors) {
         console.error("GraphQL errors:", tradesData.errors);
@@ -878,26 +929,30 @@ export async function registerRoutes(
       }
 
       const allTrades = tradesData.data?.perp?.trades || [];
+      const markets = marketsData.data?.perp?.borrowings || [];
       const openTrades = allTrades.filter(t => t.isOpen);
 
       // Convert to OpenPosition format
-      const positions: OpenPosition[] = openTrades.map(trade => ({
-        tradeId: trade.id,
-        pair: trade.perpBorrowing?.baseToken?.symbol || "Unknown",
-        direction: trade.isLong ? "long" : "short",
-        leverage: trade.leverage,
-        collateral: (trade.openCollateralAmount || trade.collateralAmount) / 1e6,
-        entryPrice: trade.openPrice,
-        currentPrice: undefined,
-        stopLoss: trade.sl,
-        takeProfit: trade.tp,
-        liquidationPrice: trade.state?.liquidationPrice,
-        unrealizedPnl: trade.state ? trade.state.pnlCollateral / 1e6 : undefined,
-        unrealizedPnlPct: trade.state?.pnlPct,
-        positionValue: trade.state ? trade.state.positionValue / 1e6 : undefined,
-        borrowingFee: trade.state ? trade.state.borrowingFeeCollateral / 1e6 : undefined,
-        openedAt: trade.openBlock?.block_ts || new Date().toISOString(),
-      }));
+      const positions: OpenPosition[] = openTrades.map(trade => {
+        const matchedMarket = matchTradeToMarket(trade.openPrice, markets);
+        return {
+          tradeId: trade.id,
+          pair: matchedMarket?.baseToken?.symbol || "Unknown",
+          direction: trade.isLong ? "long" : "short",
+          leverage: trade.leverage,
+          collateral: (trade.openCollateralAmount || trade.collateralAmount) / 1e6,
+          entryPrice: trade.openPrice,
+          currentPrice: undefined,
+          stopLoss: trade.sl,
+          takeProfit: trade.tp,
+          liquidationPrice: trade.state?.liquidationPrice,
+          unrealizedPnl: trade.state ? trade.state.pnlCollateral / 1e6 : undefined,
+          unrealizedPnlPct: trade.state?.pnlPct,
+          positionValue: trade.state ? trade.state.positionValue / 1e6 : undefined,
+          borrowingFee: trade.state ? trade.state.borrowingFeeCollateral / 1e6 : undefined,
+          openedAt: trade.openBlock?.block_ts || new Date().toISOString(),
+        };
+      });
 
       // Calculate total unrealized PnL
       const totalUnrealizedPnl = positions.reduce((sum, p) => sum + (p.unrealizedPnl ?? 0), 0);
