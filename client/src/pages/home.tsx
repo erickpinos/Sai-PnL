@@ -19,6 +19,7 @@ import {
   EyeOff,
   Download,
   Twitter,
+  DollarSign,
 } from "lucide-react";
 import html2canvas from "html2canvas";
 
@@ -577,6 +578,7 @@ export default function Home() {
   const [shareImageUrl, setShareImageUrl] = useState<string | null>(null);
   const [statsModalOpen, setStatsModalOpen] = useState(false);
   const [statsImageUrl, setStatsImageUrl] = useState<string | null>(null);
+  const [hideStatsAmount, setHideStatsAmount] = useState(false);
   const [addressHidden, setAddressHidden] = useState(false);
   const statsCardRef = useRef<HTMLDivElement>(null);
 
@@ -1861,6 +1863,22 @@ export default function Home() {
                                       ),
                                     )
                                   : 0;
+                              const biggestWinPct =
+                                profitTrades.length > 0
+                                  ? Math.max(
+                                      ...profitTrades.map(
+                                        (t) => t.profitPct ?? 0,
+                                      ),
+                                    )
+                                  : 0;
+                              const biggestLossPct =
+                                lossTrades.length > 0
+                                  ? Math.min(
+                                      ...lossTrades.map(
+                                        (t) => t.profitPct ?? 0,
+                                      ),
+                                    )
+                                  : 0;
 
                               const pairCounts: Record<string, number> = {};
                               allTrades.forEach((t) => {
@@ -1885,25 +1903,29 @@ export default function Home() {
 
                               return (
                                 <>
-                                  <div className="p-3 rounded-lg bg-slate-800/80">
-                                    <p className="text-xs text-slate-400 mb-1">
-                                      Total Volume
-                                    </p>
-                                    <p className="text-lg font-bold font-mono text-white">
-                                      $
-                                      {totalVolume.toLocaleString(undefined, {
-                                        maximumFractionDigits: 0,
-                                      })}
-                                    </p>
-                                  </div>
-                                  <div className="p-3 rounded-lg bg-slate-800/80">
-                                    <p className="text-xs text-slate-400 mb-1">
-                                      Avg Trade Size
-                                    </p>
-                                    <p className="text-lg font-bold font-mono text-white">
-                                      ${avgTradeSize.toFixed(2)}
-                                    </p>
-                                  </div>
+                                  {!hideStatsAmount && (
+                                    <div className="p-3 rounded-lg bg-slate-800/80">
+                                      <p className="text-xs text-slate-400 mb-1">
+                                        Total Volume
+                                      </p>
+                                      <p className="text-lg font-bold font-mono text-white">
+                                        $
+                                        {totalVolume.toLocaleString(undefined, {
+                                          maximumFractionDigits: 0,
+                                        })}
+                                      </p>
+                                    </div>
+                                  )}
+                                  {!hideStatsAmount && (
+                                    <div className="p-3 rounded-lg bg-slate-800/80">
+                                      <p className="text-xs text-slate-400 mb-1">
+                                        Avg Trade Size
+                                      </p>
+                                      <p className="text-lg font-bold font-mono text-white">
+                                        ${avgTradeSize.toFixed(2)}
+                                      </p>
+                                    </div>
+                                  )}
                                   <div className="p-3 rounded-lg bg-slate-800/80">
                                     <p className="text-xs text-slate-400 mb-1">
                                       Avg Leverage
@@ -1917,9 +1939,13 @@ export default function Home() {
                                       Biggest Win
                                     </p>
                                     <p className="text-lg font-bold font-mono text-green-400">
-                                      {biggestWin > 0
-                                        ? `+$${biggestWin.toFixed(2)}`
-                                        : "-"}
+                                      {hideStatsAmount
+                                        ? biggestWinPct > 0
+                                          ? `+${biggestWinPct.toFixed(2)}%`
+                                          : "-"
+                                        : biggestWin > 0
+                                          ? `+$${biggestWin.toFixed(2)}`
+                                          : "-"}
                                     </p>
                                   </div>
                                   <div className="p-3 rounded-lg bg-slate-800/80">
@@ -1927,9 +1953,13 @@ export default function Home() {
                                       Biggest Loss
                                     </p>
                                     <p className="text-lg font-bold font-mono text-red-400">
-                                      {biggestLoss < 0
-                                        ? `-$${Math.abs(biggestLoss).toFixed(2)}`
-                                        : "-"}
+                                      {hideStatsAmount
+                                        ? biggestLossPct < 0
+                                          ? `${biggestLossPct.toFixed(2)}%`
+                                          : "-"
+                                        : biggestLoss < 0
+                                          ? `-$${Math.abs(biggestLoss).toFixed(2)}`
+                                          : "-"}
                                     </p>
                                   </div>
                                   <div className="p-3 rounded-lg bg-slate-800/80">
@@ -1948,14 +1978,16 @@ export default function Home() {
                                       {longTrades} / {shortTrades}
                                     </p>
                                   </div>
-                                  <div className="p-3 rounded-lg bg-slate-800/80">
-                                    <p className="text-xs text-slate-400 mb-1">
-                                      Fees Paid
-                                    </p>
-                                    <p className="text-lg font-bold font-mono text-orange-400">
-                                      ${totalFeesPaid.toFixed(2)}
-                                    </p>
-                                  </div>
+                                  {!hideStatsAmount && (
+                                    <div className="p-3 rounded-lg bg-slate-800/80">
+                                      <p className="text-xs text-slate-400 mb-1">
+                                        Fees Paid
+                                      </p>
+                                      <p className="text-lg font-bold font-mono text-orange-400">
+                                        ${totalFeesPaid.toFixed(2)}
+                                      </p>
+                                    </div>
+                                  )}
                                   <div className="p-3 rounded-lg bg-slate-800/80">
                                     <p className="text-xs text-slate-400 mb-1">
                                       Profit Factor
@@ -2380,6 +2412,32 @@ export default function Home() {
             <DialogTitle>Share Your Trading Stats</DialogTitle>
           </DialogHeader>
           <div className="flex flex-col items-center gap-4">
+            <div className="flex items-center gap-2">
+              <Button
+                variant={hideStatsAmount ? "default" : "outline"}
+                size="sm"
+                onClick={async () => {
+                  const newValue = !hideStatsAmount;
+                  setHideStatsAmount(newValue);
+                  // Regenerate image after state update
+                  setTimeout(async () => {
+                    if (statsCardRef.current) {
+                      const canvas = await html2canvas(statsCardRef.current, {
+                        backgroundColor: "#1a1a2e",
+                        scale: 2,
+                        logging: false,
+                        useCORS: true,
+                      });
+                      setStatsImageUrl(canvas.toDataURL("image/png"));
+                    }
+                  }, 50);
+                }}
+                data-testid="button-toggle-hide-amounts"
+              >
+                <DollarSign className="w-4 h-4 mr-1" />
+                {hideStatsAmount ? "$ Hidden" : "Hide $"}
+              </Button>
+            </div>
             {statsImageUrl && (
               <img
                 src={statsImageUrl}
