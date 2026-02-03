@@ -652,18 +652,18 @@ export default function Home() {
           : "-";
 
     const html = `
-      <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif; width: 400px;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+      <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif; width: 100%; box-sizing: border-box;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
           <div>
             <h3 style="margin: 0; font-size: 20px; font-weight: bold; color: white;">Global Protocol Stats</h3>
             <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"}</p>
           </div>
           <div style="text-align: right;">
             <p style="margin: 0; font-size: 12px; color: #94a3b8;">TVL</p>
-            <p style="margin: 0; font-size: 22px; font-weight: bold; color: #60a5fa; font-family: monospace;">$${stats.totalTvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: #60a5fa; font-family: monospace;">$${stats.totalTvl.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+        <div style="display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px;">
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Total Open Interest</p>
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${stats.totalOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
@@ -673,6 +673,10 @@ export default function Home() {
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: white;">${stats.totalOpenPositions.toLocaleString()}</p>
           </div>
           <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Long/Short Ratio</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${lsRatio}</p>
+          </div>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Long OI</p>
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: #4ade80; font-family: monospace;">$${stats.longOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
           </div>
@@ -680,12 +684,11 @@ export default function Home() {
             <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Short OI</p>
             <p style="margin: 0; font-size: 16px; font-weight: bold; color: #f87171; font-family: monospace;">$${stats.shortOpenInterest.toLocaleString(undefined, { maximumFractionDigits: 0 })}</p>
           </div>
-          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8); grid-column: span 2;">
-            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Long/Short Ratio</p>
-            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">${lsRatio}</p>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">sai.fun</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: #64748b;">${new Date().toLocaleDateString()}</p>
           </div>
         </div>
-        <p style="margin: 16px 0 0 0; text-align: center; font-size: 11px; color: #64748b;">sai.fun • ${new Date().toLocaleDateString()}</p>
       </div>
     `;
 
