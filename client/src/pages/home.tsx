@@ -543,8 +543,7 @@ export default function Home() {
     container.innerHTML = htmlContent;
     container.style.position = "absolute";
     container.style.left = "-9999px";
-    container.style.width = "1200px";
-    container.style.height = "675px";
+    container.style.width = "400px";
     document.body.appendChild(container);
 
     try {
@@ -587,51 +586,51 @@ export default function Home() {
     }
     
     const html = `
-      <div style="width: 1200px; height: 675px; padding: 60px; border-radius: 20px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif; box-sizing: border-box; display: flex; flex-direction: column;">
-        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 40px;">
+      <div style="padding: 24px; border-radius: 12px; background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); border: 1px solid #334155; font-family: system-ui, -apple-system, sans-serif;">
+        <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 16px;">
           <div>
-            <h3 style="margin: 0; font-size: 42px; font-weight: bold; color: white;">Sai Perps Trade</h3>
-            <p style="margin: 8px 0 0 0; font-size: 20px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"}</p>
+            <h3 style="margin: 0; font-size: 18px; font-weight: bold; color: white;">Sai Perps Trade</h3>
+            <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"}</p>
           </div>
           <div style="text-align: right;">
-            <p style="margin: 0; font-size: 20px; color: #94a3b8;">P&L</p>
-            <p style="margin: 0; font-size: 56px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">P&L</p>
+            <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">
               ${(trade.pnlAmount ?? 0) >= 0 ? "+" : ""}$${(trade.pnlAmount ?? 0).toFixed(2)}
             </p>
           </div>
         </div>
-        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 24px; flex: 1;">
-          <div style="padding: 28px; border-radius: 16px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #94a3b8;">Pair</p>
-            <p style="margin: 0; font-size: 36px; font-weight: bold; color: white;">${trade.pair || "-"}</p>
+        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Pair</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white;">${trade.pair || "-"}</p>
           </div>
-          <div style="padding: 28px; border-radius: 16px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #94a3b8;">Direction</p>
-            <p style="margin: 0; font-size: 36px; font-weight: bold; color: ${directionColor};">${trade.direction?.toUpperCase() || "-"} ${trade.leverage}x</p>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Direction</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${directionColor};">${trade.direction?.toUpperCase() || "-"} ${trade.leverage}x</p>
           </div>
-          <div style="padding: 28px; border-radius: 16px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #94a3b8;">Entry</p>
-            <p style="margin: 0; font-size: 36px; font-weight: bold; color: white; font-family: monospace;">$${trade.openPrice?.toLocaleString() || "-"}</p>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Entry</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.openPrice?.toLocaleString() || "-"}</p>
           </div>
-          <div style="padding: 28px; border-radius: 16px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #94a3b8;">Exit</p>
-            <p style="margin: 0; font-size: 36px; font-weight: bold; color: white; font-family: monospace;">$${trade.closePrice?.toLocaleString() || "-"}</p>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Exit</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: white; font-family: monospace;">$${trade.closePrice?.toLocaleString() || "-"}</p>
           </div>
-          <div style="padding: 28px; border-radius: 16px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #94a3b8;">Return</p>
-            <p style="margin: 0; font-size: 36px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${(trade.profitPct ?? 0) >= 0 ? "+" : ""}${((trade.profitPct ?? 0) * 100).toFixed(2)}%</p>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Return</p>
+            <p style="margin: 0; font-size: 16px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${(trade.profitPct ?? 0) >= 0 ? "+" : ""}${((trade.profitPct ?? 0) * 100).toFixed(2)}%</p>
           </div>
-          <div style="padding: 28px; border-radius: 16px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #94a3b8;">Opened</p>
-            <p style="margin: 0; font-size: 32px; font-weight: bold; color: white;">${trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "-"}</p>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Opened</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.openTimestamp ? new Date(trade.openTimestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "-"}</p>
           </div>
-          <div style="padding: 28px; border-radius: 16px; background: rgba(30, 41, 59, 0.8);">
-            <p style="margin: 0 0 8px 0; font-size: 16px; color: #94a3b8;">Closed</p>
-            <p style="margin: 0; font-size: 32px; font-weight: bold; color: white;">${trade.closeTimestamp ? new Date(trade.closeTimestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "-"}</p>
+          <div style="padding: 12px; border-radius: 8px; background: rgba(30, 41, 59, 0.8);">
+            <p style="margin: 0 0 4px 0; font-size: 11px; color: #94a3b8;">Closed</p>
+            <p style="margin: 0; font-size: 14px; font-weight: bold; color: white;">${trade.closeTimestamp ? new Date(trade.closeTimestamp).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }) : "-"}</p>
           </div>
         </div>
-        <div style="margin-top: 24px; text-align: center;">
-          <p style="margin: 0; font-size: 20px; color: #94a3b8;">Position was open for <span style="color: white; font-weight: bold;">${durationText}</span></p>
+        <div style="margin-top: 16px; text-align: center;">
+          <p style="margin: 0; font-size: 12px; color: #94a3b8;">Position was open for <span style="color: white; font-weight: bold;">${durationText}</span></p>
         </div>
       </div>
     `;
