@@ -515,12 +515,16 @@ function OpenPositionsTable({
                 <TableCell
                   className={`text-right font-mono text-sm ${pnlColor}`}
                 >
-                  {hideValues ? (
-                    <span className="text-muted-foreground">•••••</span>
-                  ) : position.unrealizedPnl !== undefined ? (
+                  {position.unrealizedPnl !== undefined ? (
                     <>
-                      {position.unrealizedPnl >= 0 ? "+" : "-"}$
-                      {Math.abs(position.unrealizedPnl).toFixed(2)}
+                      {hideValues ? (
+                        <span className="text-muted-foreground">•••••</span>
+                      ) : (
+                        <>
+                          {position.unrealizedPnl >= 0 ? "+" : "-"}$
+                          {Math.abs(position.unrealizedPnl).toFixed(2)}
+                        </>
+                      )}
                       <span className="text-xs ml-1">
                         (
                         {position.unrealizedPnlPct !== undefined
