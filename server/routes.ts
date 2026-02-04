@@ -28,10 +28,7 @@ function evmToBech32(evmAddress: string): string {
   return bech32.encode("nibi", words);
 }
 
-// GraphQL query for trades
-// NOTE: perpBorrowing is intentionally excluded because the API fails for some trades
-// that have broken perpBorrowing references. We fetch markets separately and match by price.
-// TODO: Re-add perpBorrowing when the Sai Keeper API is fixed.
+// GraphQL query for trades - now includes perpBorrowing since the API fix
 const TRADES_QUERY = `
   query GetTrades($trader: String!, $limit: Int, $offset: Int) {
     perp {
@@ -54,6 +51,9 @@ const TRADES_QUERY = `
         closePrice
         sl
         tp
+        perpBorrowing {
+          marketId
+        }
         openBlock {
           block
           block_ts
@@ -98,23 +98,6 @@ const MARKETS_QUERY = `
   }
 `;
 
-// GraphQL query to get marketId for trades via tradeHistory
-// Uses tradeHistory because it returns partial data even when some trades have broken perpBorrowing
-// The API will return data for successful trades before failing on null perpBorrowing entries
-const TRADE_MARKET_QUERY = `
-  query GetTradeMarkets($trader: String!, $limit: Int) {
-    perp {
-      tradeHistory(where: { trader: $trader }, limit: $limit) {
-        trade {
-          id
-          perpBorrowing {
-            marketId
-          }
-        }
-      }
-    }
-  }
-`;
 
 interface Market {
   marketId: string;
@@ -127,56 +110,6 @@ interface MarketsQueryResult {
   perp: {
     borrowings: Market[];
   };
-}
-
-interface TradeMarketResult {
-  perp: {
-    tradeHistory: Array<{
-      trade: {
-        id: number;
-        perpBorrowing: { marketId: number } | null;
-      } | null;
-    }>;
-  };
-}
-
-// Fetch marketId for trades via tradeHistory query
-// Returns a map of tradeId → marketId
-// The API returns partial data even when some entries have broken perpBorrowing,
-// so we can extract marketIds for the successful trades
-async function fetchMarketIdsForTrades(
-  graphqlUrl: string, 
-  trader: string,
-  limit: number = 200
-): Promise<Map<number, number>> {
-  const marketIdMap = new Map<number, number>();
-  
-  try {
-    const response = await fetch(graphqlUrl, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: TRADE_MARKET_QUERY,
-        variables: { trader, limit },
-      }),
-    });
-    
-    const result = await response.json() as { data?: TradeMarketResult['perp']; errors?: any[] };
-    
-    // Even if there are errors, check if we got partial data
-    const tradeHistory = (result as any)?.data?.perp?.tradeHistory;
-    if (Array.isArray(tradeHistory)) {
-      for (const item of tradeHistory) {
-        if (item?.trade?.id !== undefined && item?.trade?.perpBorrowing?.marketId !== undefined) {
-          marketIdMap.set(item.trade.id, item.trade.perpBorrowing.marketId);
-        }
-      }
-    }
-  } catch (e) {
-    console.log("Failed to fetch market IDs:", e);
-  }
-  
-  return marketIdMap;
 }
 
 // Build a mapping from marketId to symbol using the borrowings data
@@ -469,6 +402,9 @@ interface PerpTrade {
   closePrice: number | null;
   sl: number | null;
   tp: number | null;
+  perpBorrowing: {
+    marketId: number;
+  } | null;
   openBlock: {
     block: number;
     block_ts: string;
@@ -680,7 +616,6 @@ function convertTrade(
   perpTrade: PerpTrade, 
   pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, 
   feeMap: Map<number, TradeFees>, 
-  marketIdMap: Map<number, number>,
   symbolMap: Map<number, string>
 ): Trade {
   const isOpen = perpTrade.isOpen;
@@ -688,8 +623,8 @@ function convertTrade(
     ? (perpTrade.openBlock?.block_ts || new Date().toISOString())
     : (perpTrade.closeBlock?.block_ts || perpTrade.openBlock?.block_ts || new Date().toISOString());
   
-  // Look up market symbol using marketId from individual trade query
-  const marketId = marketIdMap.get(perpTrade.id);
+  // Get market symbol directly from perpBorrowing
+  const marketId = perpTrade.perpBorrowing?.marketId;
   const pair = marketId !== undefined ? (symbolMap.get(marketId) || "Unknown") : "Unknown";
   
   const trade: Trade = {
@@ -750,9 +685,10 @@ function convertTrade(
 }
 
 // Convert trade history item to our Trade type (for closed trades with realized P&L)
+// Note: Trade history items don't include perpBorrowing, so we pass the trades list to look up market info
 function convertTradeHistoryItem(
   item: TradeHistoryItem, 
-  marketIdMap: Map<number, number>,
+  tradesMap: Map<number, PerpTrade>,
   symbolMap: Map<number, string>
 ): Trade | null {
   // Only process close events
@@ -761,11 +697,12 @@ function convertTradeHistoryItem(
     return null;
   }
   
-  // Look up market symbol using marketId from individual trade query
-  const marketId = marketIdMap.get(item.trade.id);
+  // Look up market symbol from the corresponding trade's perpBorrowing
+  const perpTrade = tradesMap.get(item.trade.id);
+  const marketId = perpTrade?.perpBorrowing?.marketId;
   const pair = marketId !== undefined ? (symbolMap.get(marketId) || "Unknown") : "Unknown";
   
-  const trade: Trade = {
+  const result: Trade = {
     txHash: `history-${item.id}`,
     timestamp: item.block.block_ts,
     type: "close",
@@ -778,17 +715,17 @@ function convertTradeHistoryItem(
   };
   
   if (item.realizedPnlPct !== null) {
-    trade.profitPct = item.realizedPnlPct;
+    result.profitPct = item.realizedPnlPct;
   }
   if (item.realizedPnlCollateral !== null) {
-    trade.pnlAmount = item.realizedPnlCollateral / 1e6;
+    result.pnlAmount = item.realizedPnlCollateral / 1e6;
   }
   // Calculate amount received at closing (collateral + P&L)
-  if (trade.collateral !== undefined && trade.pnlAmount !== undefined) {
-    trade.amountReceived = trade.collateral + trade.pnlAmount;
+  if (result.collateral !== undefined && result.pnlAmount !== undefined) {
+    result.amountReceived = result.collateral + result.pnlAmount;
   }
   
-  return trade;
+  return result;
 }
 
 export async function registerRoutes(
@@ -865,12 +802,6 @@ export async function registerRoutes(
       // Build marketId → symbol mapping from borrowings data
       const symbolMap = buildMarketIdToSymbolMap(markets);
       
-      // Fetch marketId for trades via tradeHistory (handles broken perpBorrowing gracefully)
-      // The API returns partial data even when some entries have broken references
-      console.log(`Fetching market info for trades...`);
-      const marketIdMap = await fetchMarketIdsForTrades(networkConfig.graphql, nibiAddress, limit * 2);
-      console.log(`Got market info for ${marketIdMap.size} trades`);
-      
       // Collect transaction hashes for RPC fee extraction
       const txHashesForFees: { tradeId: number; evmTxHash: string; isOpening: boolean }[] = [];
       const openingTypes = ["position_opened"];
@@ -911,13 +842,19 @@ export async function registerRoutes(
         }
       }
       
+      // Build a map of trade ID to PerpTrade for lookups
+      const perpTradesMap = new Map<number, PerpTrade>();
+      for (const perpTrade of tradesResult.perp.trades) {
+        perpTradesMap.set(perpTrade.id, perpTrade);
+      }
+      
       // Convert trades
       const trades: Trade[] = [];
       const seenTradeIds = new Set<number>();
       
       // First, add trades from the trades query (includes open positions)
       for (const perpTrade of tradesResult.perp.trades) {
-        const trade = convertTrade(perpTrade, pnlMap, feeMap, marketIdMap, symbolMap);
+        const trade = convertTrade(perpTrade, pnlMap, feeMap, symbolMap);
         trades.push(trade);
         seenTradeIds.add(perpTrade.id);
       }
@@ -925,7 +862,7 @@ export async function registerRoutes(
       // Add closed trades from history that might not be in the trades list
       for (const historyItem of historyResult.perp.tradeHistory) {
         if (!seenTradeIds.has(historyItem.trade.id)) {
-          const trade = convertTradeHistoryItem(historyItem, marketIdMap, symbolMap);
+          const trade = convertTradeHistoryItem(historyItem, perpTradesMap, symbolMap);
           if (trade) {
             trades.push(trade);
             seenTradeIds.add(historyItem.trade.id);
@@ -1011,13 +948,10 @@ export async function registerRoutes(
       
       // Build marketId → symbol mapping from borrowings data
       const symbolMap = buildMarketIdToSymbolMap(markets);
-      
-      // Fetch marketId for trades via tradeHistory
-      const marketIdMap = await fetchMarketIdsForTrades(networkConfig.graphql, bech32Address, 100);
 
-      // Convert to OpenPosition format
+      // Convert to OpenPosition format - use perpBorrowing directly from trades
       const positions: OpenPosition[] = openTrades.map(trade => {
-        const marketId = marketIdMap.get(trade.id);
+        const marketId = trade.perpBorrowing?.marketId;
         const pair = marketId !== undefined ? (symbolMap.get(marketId) || "Unknown") : "Unknown";
         return {
           tradeId: trade.id,
