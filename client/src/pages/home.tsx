@@ -321,24 +321,32 @@ function TradesTable({
                     : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {trade.openingFee !== undefined
-                  ? `$${trade.openingFee.toFixed(4)}`
-                  : "-"}
+                {hideValues
+                  ? "•••••"
+                  : trade.openingFee !== undefined
+                    ? `$${trade.openingFee.toFixed(4)}`
+                    : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {trade.closingFee !== undefined
-                  ? `$${trade.closingFee.toFixed(4)}`
-                  : "-"}
+                {hideValues
+                  ? "•••••"
+                  : trade.closingFee !== undefined
+                    ? `$${trade.closingFee.toFixed(4)}`
+                    : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {trade.borrowingFee !== undefined
-                  ? `$${trade.borrowingFee.toFixed(4)}`
-                  : "-"}
+                {hideValues
+                  ? "•••••"
+                  : trade.borrowingFee !== undefined
+                    ? `$${trade.borrowingFee.toFixed(4)}`
+                    : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {trade.triggerFee !== undefined && trade.triggerFee > 0
-                  ? `$${trade.triggerFee.toFixed(4)}`
-                  : "-"}
+                {hideValues
+                  ? "•••••"
+                  : trade.triggerFee !== undefined && trade.triggerFee > 0
+                    ? `$${trade.triggerFee.toFixed(4)}`
+                    : "-"}
               </TableCell>
               <TableCell className="text-right font-mono text-sm">
                 {hideValues
@@ -436,7 +444,7 @@ function OpenPositionsTable({
                 Take Profit
               </div>
             </TableHead>
-            <TableHead className="text-right">Unrealized P&L</TableHead>
+            <TableHead className="text-right">Unrealized PnL</TableHead>
             <TableHead className="text-right">Borrowing Fee</TableHead>
             <TableHead>Opened</TableHead>
           </TableRow>
@@ -529,9 +537,11 @@ function OpenPositionsTable({
                   )}
                 </TableCell>
                 <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                  {position.borrowingFee !== undefined
-                    ? `$${position.borrowingFee.toFixed(4)}`
-                    : "-"}
+                  {hideValues
+                    ? "•••••"
+                    : position.borrowingFee !== undefined
+                      ? `$${position.borrowingFee.toFixed(4)}`
+                      : "-"}
                 </TableCell>
                 <TableCell className="text-sm text-muted-foreground">
                   {new Date(position.openedAt).toLocaleString(undefined, {
@@ -746,7 +756,7 @@ export default function Home() {
             <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"}</p>
           </div>
           <div style="text-align: right;">
-            <p style="margin: 0; font-size: 12px; color: #94a3b8;">P&L</p>
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">PnL</p>
             <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${pnlDisplay}</p>
           </div>
         </div>
@@ -802,7 +812,7 @@ export default function Home() {
             <p style="margin: 4px 0 0 0; font-size: 12px; color: #94a3b8;">${network === "mainnet" ? "Mainnet" : "Testnet"} • Open</p>
           </div>
           <div style="text-align: right;">
-            <p style="margin: 0; font-size: 12px; color: #94a3b8;">Unrealized P&L</p>
+            <p style="margin: 0; font-size: 12px; color: #94a3b8;">Unrealized PnL</p>
             <p style="margin: 0; font-size: 24px; font-weight: bold; color: ${pnlColor}; font-family: monospace;">${pnlDisplay}</p>
           </div>
         </div>
