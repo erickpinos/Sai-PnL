@@ -92,7 +92,6 @@ const addressSchema = z.object({
 });
 
 type AddressForm = z.infer<typeof addressSchema>;
-type PnlDisplayMode = "dollars" | "percent";
 
 function StatsCard({
   title,
@@ -179,13 +178,11 @@ function StatsCard({
 function TradesTable({
   trades,
   loading,
-  pnlDisplayMode,
   onShare,
   hideValues,
 }: {
   trades: Trade[];
   loading: boolean;
-  pnlDisplayMode: PnlDisplayMode;
   onShare?: (trade: Trade) => void;
   hideValues?: boolean;
 }) {
@@ -221,9 +218,7 @@ function TradesTable({
             <TableHead className="text-right">Entry Price</TableHead>
             <TableHead className="text-right">Exit Price</TableHead>
             <TableHead className="text-right">Collateral</TableHead>
-            <TableHead className="text-right">
-              {pnlDisplayMode === "percent" ? "PnL %" : "PnL $"}
-            </TableHead>
+            <TableHead className="text-right">PnL</TableHead>
             <TableHead className="text-right">Returned</TableHead>
             <TableHead className="text-right">Opening Fee</TableHead>
             <TableHead className="text-right">Closing Fee</TableHead>
@@ -292,31 +287,27 @@ function TradesTable({
                     : "-"}
               </TableCell>
               <TableCell className="text-right">
-                {pnlDisplayMode === "percent" ? (
-                  trade.profitPct !== undefined ? (
-                    <span
-                      className={`font-semibold ${
-                        trade.profitPct >= 0
-                          ? "text-emerald-500"
-                          : "text-red-500"
-                      }`}
-                    >
-                      {trade.profitPct >= 0 ? "+" : ""}
-                      {(trade.profitPct * 100).toFixed(2)}%
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )
-                ) : hideValues ? (
-                  <span className="text-muted-foreground">•••••</span>
-                ) : trade.pnlAmount !== undefined ? (
+                {trade.pnlAmount !== undefined ? (
                   <span
                     className={`font-semibold ${
                       trade.pnlAmount >= 0 ? "text-emerald-500" : "text-red-500"
                     }`}
                   >
-                    {trade.pnlAmount >= 0 ? "+" : ""}$
-                    {trade.pnlAmount.toFixed(2)}
+                    {hideValues ? (
+                      <span className="text-muted-foreground">•••••</span>
+                    ) : (
+                      <>
+                        {trade.pnlAmount >= 0 ? "+" : "-"}$
+                        {Math.abs(trade.pnlAmount).toFixed(2)}
+                      </>
+                    )}
+                    <span className="text-xs ml-1">
+                      (
+                      {trade.profitPct !== undefined
+                        ? `${trade.profitPct >= 0 ? "+" : ""}${(trade.profitPct * 100).toFixed(2)}%`
+                        : "-"}
+                      )
+                    </span>
                   </span>
                 ) : (
                   <span className="text-muted-foreground">-</span>
@@ -569,8 +560,6 @@ const NETWORK_CONFIG = {
 export default function Home() {
   const [searchAddress, setSearchAddress] = useState<string | null>(null);
   const [network, setNetwork] = useState<Network>("mainnet");
-  const [pnlDisplayMode, setPnlDisplayMode] =
-    useState<PnlDisplayMode>("percent");
   const [showAfterFees, setShowAfterFees] = useState(false);
   const [activeTab, setActiveTab] = useState<
     "trades" | "positions" | "vaults" | "stats"
@@ -994,10 +983,6 @@ export default function Home() {
   const displayPnlPct = showAfterFees ? totalPnlAfterFeesPct : totalPnlPct;
   const pnlTrend = displayPnl > 0 ? "up" : displayPnl < 0 ? "down" : "neutral";
 
-  const togglePnlMode = () => {
-    setPnlDisplayMode((prev) => (prev === "percent" ? "dollars" : "percent"));
-  };
-
   const toggleAfterFees = () => {
     setShowAfterFees((prev) => !prev);
   };
@@ -1187,20 +1172,16 @@ export default function Home() {
                 title="Total PnL"
                 value={
                   trades.length > 0
-                    ? pnlDisplayMode === "percent"
-                      ? `${displayPnlPct >= 0 ? "+" : ""}${(displayPnlPct * 100).toFixed(2)}%`
-                      : addressHidden
-                        ? "•••••"
-                        : `${displayPnl >= 0 ? "+" : "-"}$${Math.abs(displayPnl).toFixed(2)}`
+                    ? addressHidden
+                      ? `••••• (${displayPnlPct >= 0 ? "+" : ""}${(displayPnlPct * 100).toFixed(2)}%)`
+                      : `${displayPnl >= 0 ? "+" : "-"}$${Math.abs(displayPnl).toFixed(2)} (${displayPnlPct >= 0 ? "+" : ""}${(displayPnlPct * 100).toFixed(2)}%)`
                     : "-"
                 }
                 icon={displayPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
                 loading={isLoading}
-                onToggle={togglePnlMode}
-                toggleLabel={pnlDisplayMode === "percent" ? "%" : "$"}
-                onToggle2={toggleAfterFees}
-                toggleLabel2={showAfterFees ? "After Fees" : "Before Fees"}
+                onToggle={toggleAfterFees}
+                toggleLabel={showAfterFees ? "After Fees" : "Before Fees"}
               />
               <StatsCard
                 title="Win Rate"
@@ -1265,7 +1246,6 @@ export default function Home() {
                     <TradesTable
                       trades={trades.filter((t) => t.type === "close")}
                       loading={isLoading}
-                      pnlDisplayMode={pnlDisplayMode}
                       onShare={downloadTradeCard}
                       hideValues={addressHidden}
                     />
