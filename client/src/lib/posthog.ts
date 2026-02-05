@@ -1,19 +1,15 @@
 import posthog from 'posthog-js';
 
-const POSTHOG_KEY = import.meta.env.VITE_POSTHOG_KEY;
-const POSTHOG_HOST = import.meta.env.VITE_POSTHOG_HOST || 'https://us.i.posthog.com';
+const POSTHOG_KEY = import.meta.env.VITE_PUBLIC_POSTHOG_KEY;
+const POSTHOG_HOST = import.meta.env.VITE_PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 
-export function initPostHog() {
-  if (POSTHOG_KEY) {
-    posthog.init(POSTHOG_KEY, {
-      api_host: POSTHOG_HOST,
-      person_profiles: 'identified_only',
-      capture_pageview: true,
-      capture_pageleave: true,
-      autocapture: true,
-    });
-  }
-}
+export const posthogOptions = {
+  api_host: POSTHOG_HOST,
+  person_profiles: 'identified_only' as const,
+  capture_pageview: true,
+  capture_pageleave: true,
+  autocapture: true,
+};
 
 export function identifyUser(address: string) {
   if (POSTHOG_KEY) {
@@ -35,4 +31,4 @@ export function trackEvent(eventName: string, properties?: Record<string, any>) 
   }
 }
 
-export { posthog };
+export { posthog, POSTHOG_KEY, POSTHOG_HOST };
