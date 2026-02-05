@@ -1,4 +1,4 @@
-// Storage interface for Sai Perps Tracker
+// Storage interface for Sai PnL Tracker
 // Currently using in-memory caching for API responses
 
 export interface IStorage {
