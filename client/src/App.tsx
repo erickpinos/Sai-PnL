@@ -5,6 +5,8 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import Home from "@/pages/home";
 import NotFound from "@/pages/not-found";
+import { useEffect } from "react";
+import { initPostHog } from "./lib/posthog";
 
 function Router() {
   return (
@@ -16,6 +18,10 @@ function Router() {
 }
 
 function App() {
+  useEffect(() => {
+    initPostHog();
+  }, []);
+
   return (
     <QueryClientProvider client={queryClient}>
       <TooltipProvider>
