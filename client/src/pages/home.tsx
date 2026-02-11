@@ -23,6 +23,50 @@ import {
 import html2canvas from "html2canvas";
 import { SHARE_MESSAGES, SHARE_URL } from "@/config/shareMessages";
 
+import sticker1 from "@assets/1232643410003886140_1770842707768.png";
+import sticker2 from "@assets/1232643317360230481_1770842707780.png";
+import sticker3 from "@assets/1232643234615005224_1770842707780.png";
+import sticker4 from "@assets/1232643149034160158_1770842707781.png";
+import sticker5 from "@assets/1232643041190215771_1770842707781.png";
+import sticker6 from "@assets/1232642970390368258_1770842707781.png";
+import sticker7 from "@assets/1232642808117067806_1770842707781.png";
+import sticker8 from "@assets/1232642616340910121_1770842707781.png";
+import sticker9 from "@assets/1232642491342127115_1770842707782.png";
+import sticker10 from "@assets/1232642267487932487_1770842707782.png";
+import sticker11 from "@assets/1232641642003959839_1770842707782.png";
+import sticker12 from "@assets/1232641543324569671_1770842707782.png";
+import sticker13 from "@assets/1232641431366270989_1770842707783.png";
+import sticker14 from "@assets/1232642008636592138_1770842707783.png";
+import sticker15 from "@assets/1232641283458207804_1770842707783.png";
+import sticker16 from "@assets/1232641155590787125_1770842707783.png";
+import sticker17 from "@assets/1232641009104588801_1770842707784.png";
+import sticker18 from "@assets/1232640858550046832_1770842707784.png";
+import sticker19 from "@assets/1232640712689057927_1770842707784.png";
+import sticker20 from "@assets/1232640520019247124_1770842707785.png";
+
+const STICKERS = [
+  { id: "heart-hands", src: sticker1, label: "Heart Hands" },
+  { id: "drinking", src: sticker2, label: "Drinking" },
+  { id: "phone", src: sticker3, label: "Phone" },
+  { id: "money-pile", src: sticker4, label: "Money Pile" },
+  { id: "wine-glass", src: sticker5, label: "Wine Glass" },
+  { id: "sad-defeated", src: sticker6, label: "Sad/Defeated" },
+  { id: "coffee-mug", src: sticker7, label: "Coffee Mug" },
+  { id: "water-gun", src: sticker8, label: "Water Gun" },
+  { id: "magnifying-glass", src: sticker9, label: "Magnifying Glass" },
+  { id: "sitting-chair", src: sticker10, label: "Sitting Chair" },
+  { id: "pointing-grinning", src: sticker11, label: "Pointing/Grinning" },
+  { id: "sword", src: sticker12, label: "Sword" },
+  { id: "laptop", src: sticker13, label: "Laptop" },
+  { id: "shopping-bag", src: sticker14, label: "Shopping Bag" },
+  { id: "phone-selfie", src: sticker15, label: "Phone Selfie" },
+  { id: "sleepy-anime", src: sticker16, label: "Sleepy Anime" },
+  { id: "hearts-anime", src: sticker17, label: "Hearts Anime" },
+  { id: "devil-anime", src: sticker18, label: "Devil Anime" },
+  { id: "muscular", src: sticker19, label: "Muscular" },
+  { id: "gm-coffee", src: sticker20, label: "GM Coffee" },
+];
+
 declare global {
   interface Window {
     ethereum?: {
@@ -584,7 +628,35 @@ export default function Home() {
   const [statsImageUrl, setStatsImageUrl] = useState<string | null>(null);
   const [hideStatsAmount, setHideStatsAmount] = useState(false);
   const [addressHidden, setAddressHidden] = useState(false);
+  const [selectedSticker, setSelectedSticker] = useState<string | null>(null);
+  const [baseShareImageUrl, setBaseShareImageUrl] = useState<string | null>(null);
+  const [baseStatsImageUrl, setBaseStatsImageUrl] = useState<string | null>(null);
   const statsCardRef = useRef<HTMLDivElement>(null);
+
+  const compositeImageWithSticker = (baseImageUrl: string, stickerSrc: string): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const baseImg = new Image();
+      baseImg.onload = () => {
+        const stickerImg = new Image();
+        stickerImg.onload = () => {
+          const canvas = document.createElement("canvas");
+          canvas.width = baseImg.width;
+          canvas.height = baseImg.height;
+          const ctx = canvas.getContext("2d")!;
+          ctx.drawImage(baseImg, 0, 0);
+          const stickerSize = Math.floor(baseImg.height * 0.35);
+          const stickerX = baseImg.width - stickerSize - 10;
+          const stickerY = baseImg.height - stickerSize - 10;
+          ctx.drawImage(stickerImg, stickerX, stickerY, stickerSize, stickerSize);
+          resolve(canvas.toDataURL("image/png"));
+        };
+        stickerImg.onerror = reject;
+        stickerImg.src = stickerSrc;
+      };
+      baseImg.onerror = reject;
+      baseImg.src = baseImageUrl;
+    });
+  };
 
   const form = useForm<AddressForm>({
     resolver: zodResolver(addressSchema),
@@ -636,7 +708,10 @@ export default function Home() {
         useCORS: true,
       });
 
-      setStatsImageUrl(canvas.toDataURL("image/png"));
+      const statsDataUrl = canvas.toDataURL("image/png");
+      setBaseStatsImageUrl(statsDataUrl);
+      setStatsImageUrl(statsDataUrl);
+      setSelectedSticker(null);
       setStatsModalOpen(true);
     } catch (error) {
       console.error("Failed to generate stats card:", error);
@@ -717,8 +792,10 @@ export default function Home() {
       });
 
       const imageUrl = canvas.toDataURL("image/png");
+      setBaseShareImageUrl(imageUrl);
       setShareImageUrl(imageUrl);
       setShareMessageType(messageType);
+      setSelectedSticker(null);
       setShareModalOpen(true);
     } catch (error) {
       console.error("Failed to generate share image:", error);
@@ -2344,6 +2421,36 @@ export default function Home() {
                 data-testid="share-image-preview"
               />
             )}
+            <div className="w-full">
+              <p className="text-sm text-muted-foreground mb-2">Add a sticker:</p>
+              <div className="flex flex-wrap gap-2 justify-center max-h-[120px] overflow-y-auto">
+                {STICKERS.map((sticker) => (
+                  <button
+                    key={sticker.id}
+                    onClick={async () => {
+                      if (selectedSticker === sticker.id) {
+                        setSelectedSticker(null);
+                        setShareImageUrl(baseShareImageUrl);
+                      } else {
+                        setSelectedSticker(sticker.id);
+                        if (baseShareImageUrl) {
+                          const composited = await compositeImageWithSticker(baseShareImageUrl, sticker.src);
+                          setShareImageUrl(composited);
+                        }
+                      }
+                    }}
+                    className={`w-12 h-12 rounded-md overflow-hidden border-2 transition-colors ${
+                      selectedSticker === sticker.id
+                        ? "border-primary"
+                        : "border-transparent hover-elevate"
+                    }`}
+                    data-testid={`sticker-${sticker.id}`}
+                  >
+                    <img src={sticker.src} alt={sticker.label} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-3">
               <Button
                 onClick={() => {
@@ -2361,7 +2468,7 @@ export default function Home() {
                 <Download className="w-4 h-4 mr-2" />
                 Download
               </Button>
-                            <Button
+              <Button
                 variant="outline"
                 onClick={() => {
                   const text = SHARE_MESSAGES[shareMessageType];
@@ -2396,6 +2503,36 @@ export default function Home() {
                 data-testid="stats-image-preview"
               />
             )}
+            <div className="w-full">
+              <p className="text-sm text-muted-foreground mb-2">Add a sticker:</p>
+              <div className="flex flex-wrap gap-2 justify-center max-h-[120px] overflow-y-auto">
+                {STICKERS.map((sticker) => (
+                  <button
+                    key={sticker.id}
+                    onClick={async () => {
+                      if (selectedSticker === sticker.id) {
+                        setSelectedSticker(null);
+                        setStatsImageUrl(baseStatsImageUrl);
+                      } else {
+                        setSelectedSticker(sticker.id);
+                        if (baseStatsImageUrl) {
+                          const composited = await compositeImageWithSticker(baseStatsImageUrl, sticker.src);
+                          setStatsImageUrl(composited);
+                        }
+                      }
+                    }}
+                    className={`w-12 h-12 rounded-md overflow-hidden border-2 transition-colors ${
+                      selectedSticker === sticker.id
+                        ? "border-primary"
+                        : "border-transparent hover-elevate"
+                    }`}
+                    data-testid={`sticker-stats-${sticker.id}`}
+                  >
+                    <img src={sticker.src} alt={sticker.label} className="w-full h-full object-cover" />
+                  </button>
+                ))}
+              </div>
+            </div>
             <div className="flex gap-3">
               <Button
                 onClick={() => {
@@ -2426,7 +2563,19 @@ export default function Home() {
                         logging: false,
                         useCORS: true,
                       });
-                      setStatsImageUrl(canvas.toDataURL("image/png"));
+                      const newBaseUrl = canvas.toDataURL("image/png");
+                      setBaseStatsImageUrl(newBaseUrl);
+                      if (selectedSticker) {
+                        const sticker = STICKERS.find(s => s.id === selectedSticker);
+                        if (sticker) {
+                          const composited = await compositeImageWithSticker(newBaseUrl, sticker.src);
+                          setStatsImageUrl(composited);
+                        } else {
+                          setStatsImageUrl(newBaseUrl);
+                        }
+                      } else {
+                        setStatsImageUrl(newBaseUrl);
+                      }
                     }
                   }, 50);
                 }}
