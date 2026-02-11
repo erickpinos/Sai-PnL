@@ -43,6 +43,16 @@ import sticker17 from "@assets/1232641009104588801_1770842707784.png";
 import sticker18 from "@assets/1232640858550046832_1770842707784.png";
 import sticker19 from "@assets/1232640712689057927_1770842707784.png";
 import sticker20 from "@assets/1232640520019247124_1770842707785.png";
+import sticker21 from "@assets/1232640443951353976_1770843270974.png";
+import sticker22 from "@assets/1232640327219810314_1770843270978.png";
+import sticker23 from "@assets/1232640205140525096_1770843270978.png";
+import sticker24 from "@assets/1232640092141650030_1770843270979.png";
+import sticker25 from "@assets/1232639980971622471_1770843270979.png";
+import sticker26 from "@assets/1232639861178236980_1770843270979.png";
+import sticker27 from "@assets/1232639747231453195_1770843270979.png";
+import sticker28 from "@assets/1216788132335321108_1770843270979.png";
+import sticker29 from "@assets/1202414671681036369_1770843270979.png";
+import sticker30 from "@assets/1202409660435660853_1770843270980.png";
 
 const STICKERS = [
   { id: "heart-hands", src: sticker1, label: "Heart Hands" },
@@ -65,6 +75,16 @@ const STICKERS = [
   { id: "devil-anime", src: sticker18, label: "Devil Anime" },
   { id: "muscular", src: sticker19, label: "Muscular" },
   { id: "gm-coffee", src: sticker20, label: "GM Coffee" },
+  { id: "close-up", src: sticker21, label: "Close Up" },
+  { id: "dumbbell", src: sticker22, label: "Dumbbell" },
+  { id: "pleased", src: sticker23, label: "Pleased" },
+  { id: "good-morning", src: sticker24, label: "Good Morning" },
+  { id: "nibi-girl", src: sticker25, label: "Nibi Girl" },
+  { id: "wink", src: sticker26, label: "Wink" },
+  { id: "smirk", src: sticker27, label: "Smirk" },
+  { id: "nibiru-logo", src: sticker28, label: "Nibiru Logo" },
+  { id: "turtle", src: sticker29, label: "Turtle" },
+  { id: "big-dog", src: sticker30, label: "Big Dog" },
 ];
 
 declare global {
