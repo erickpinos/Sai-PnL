@@ -653,9 +653,7 @@ export default function Home() {
   const [baseStatsImageUrl, setBaseStatsImageUrl] = useState<string | null>(null);
   const statsCardRef = useRef<HTMLDivElement>(null);
 
-  const MIRRORED_STICKERS = ["heart-hands"];
-
-  const compositeImageWithSticker = (baseImageUrl: string, stickerSrc: string, stickerId?: string): Promise<string> => {
+  const compositeImageWithSticker = (baseImageUrl: string, stickerSrc: string): Promise<string> => {
     return new Promise((resolve, reject) => {
       const baseImg = new Image();
       baseImg.onload = () => {
@@ -666,28 +664,10 @@ export default function Home() {
           canvas.height = baseImg.height;
           const ctx = canvas.getContext("2d")!;
           ctx.drawImage(baseImg, 0, 0);
-          const maxStickerHeight = Math.floor(baseImg.height * 0.35);
-          const aspect = stickerImg.width / stickerImg.height;
-          let stickerW: number, stickerH: number;
-          if (aspect >= 1) {
-            stickerW = Math.floor(maxStickerHeight * aspect);
-            stickerH = maxStickerHeight;
-          } else {
-            stickerW = maxStickerHeight;
-            stickerH = Math.floor(maxStickerHeight / aspect);
-          }
-          const stickerX = baseImg.width - stickerW - 10;
-          const stickerY = baseImg.height - stickerH - 10;
-          const shouldMirror = stickerId && MIRRORED_STICKERS.includes(stickerId);
-          if (shouldMirror) {
-            ctx.save();
-            ctx.translate(stickerX + stickerW, stickerY);
-            ctx.scale(-1, 1);
-            ctx.drawImage(stickerImg, 0, 0, stickerW, stickerH);
-            ctx.restore();
-          } else {
-            ctx.drawImage(stickerImg, stickerX, stickerY, stickerW, stickerH);
-          }
+          const stickerSize = Math.floor(baseImg.height * 0.35);
+          const stickerX = baseImg.width - stickerSize - 10;
+          const stickerY = baseImg.height - stickerSize - 10;
+          ctx.drawImage(stickerImg, stickerX, stickerY, stickerSize, stickerSize);
           resolve(canvas.toDataURL("image/png"));
         };
         stickerImg.onerror = reject;
@@ -2474,7 +2454,7 @@ export default function Home() {
                       } else {
                         setSelectedSticker(sticker.id);
                         if (baseShareImageUrl) {
-                          const composited = await compositeImageWithSticker(baseShareImageUrl, sticker.src, sticker.id);
+                          const composited = await compositeImageWithSticker(baseShareImageUrl, sticker.src);
                           setShareImageUrl(composited);
                         }
                       }
@@ -2556,7 +2536,7 @@ export default function Home() {
                       } else {
                         setSelectedSticker(sticker.id);
                         if (baseStatsImageUrl) {
-                          const composited = await compositeImageWithSticker(baseStatsImageUrl, sticker.src, sticker.id);
+                          const composited = await compositeImageWithSticker(baseStatsImageUrl, sticker.src);
                           setStatsImageUrl(composited);
                         }
                       }
@@ -2608,7 +2588,7 @@ export default function Home() {
                       if (selectedSticker) {
                         const sticker = STICKERS.find(s => s.id === selectedSticker);
                         if (sticker) {
-                          const composited = await compositeImageWithSticker(newBaseUrl, sticker.src, sticker.id);
+                          const composited = await compositeImageWithSticker(newBaseUrl, sticker.src);
                           setStatsImageUrl(composited);
                         } else {
                           setStatsImageUrl(newBaseUrl);
