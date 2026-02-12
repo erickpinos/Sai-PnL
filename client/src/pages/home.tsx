@@ -664,10 +664,16 @@ export default function Home() {
           canvas.height = baseImg.height;
           const ctx = canvas.getContext("2d")!;
           ctx.drawImage(baseImg, 0, 0);
-          const maxStickerHeight = Math.floor(baseImg.height * 0.35);
+          const maxStickerDim = Math.floor(baseImg.height * 0.35);
           const aspect = stickerImg.naturalWidth / stickerImg.naturalHeight;
-          const stickerH = maxStickerHeight;
-          const stickerW = Math.floor(stickerH * aspect);
+          let stickerW, stickerH;
+          if (aspect > 1) {
+            stickerW = maxStickerDim;
+            stickerH = Math.floor(maxStickerDim / aspect);
+          } else {
+            stickerH = maxStickerDim;
+            stickerW = Math.floor(maxStickerDim * aspect);
+          }
           const stickerX = baseImg.width - stickerW - 10;
           const stickerY = baseImg.height - stickerH - 10;
           ctx.drawImage(stickerImg, stickerX, stickerY, stickerW, stickerH);
