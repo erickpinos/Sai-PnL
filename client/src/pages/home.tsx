@@ -674,8 +674,9 @@ export default function Home() {
             stickerH = maxStickerDim;
             stickerW = Math.floor(maxStickerDim * aspect);
           }
-          const stickerX = baseImg.width - stickerW - 10;
-          const stickerY = baseImg.height - stickerH - 10;
+          const padding = 20;
+          const stickerX = baseImg.width - stickerW - padding;
+          const stickerY = baseImg.height - stickerH - padding;
           ctx.drawImage(stickerImg, stickerX, stickerY, stickerW, stickerH);
           resolve(canvas.toDataURL("image/png"));
         };
