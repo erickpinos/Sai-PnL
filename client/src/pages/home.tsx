@@ -664,10 +664,13 @@ export default function Home() {
           canvas.height = baseImg.height;
           const ctx = canvas.getContext("2d")!;
           ctx.drawImage(baseImg, 0, 0);
-          const stickerSize = Math.floor(baseImg.height * 0.35);
-          const stickerX = baseImg.width - stickerSize - 10;
-          const stickerY = baseImg.height - stickerSize - 10;
-          ctx.drawImage(stickerImg, stickerX, stickerY, stickerSize, stickerSize);
+          const maxStickerHeight = Math.floor(baseImg.height * 0.35);
+          const aspect = stickerImg.naturalWidth / stickerImg.naturalHeight;
+          const stickerH = maxStickerHeight;
+          const stickerW = Math.floor(stickerH * aspect);
+          const stickerX = baseImg.width - stickerW - 10;
+          const stickerY = baseImg.height - stickerH - 10;
+          ctx.drawImage(stickerImg, stickerX, stickerY, stickerW, stickerH);
           resolve(canvas.toDataURL("image/png"));
         };
         stickerImg.onerror = reject;
