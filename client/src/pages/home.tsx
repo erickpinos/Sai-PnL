@@ -1080,10 +1080,6 @@ export default function Home() {
   );
   const wins = closeTrades.filter((t) => (t.profitPct ?? 0) > 0).length;
   const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
-  const totalPnlPct = closeTrades.reduce(
-    (sum, t) => sum + (t.profitPct ?? 0),
-    0,
-  );
   const totalPnlDollars = closeTrades.reduce(
     (sum, t) => sum + (t.pnlAmount ?? 0),
     0,
@@ -1093,6 +1089,8 @@ export default function Home() {
     (sum, t) => sum + (t.collateral ?? 0),
     0,
   );
+  const totalPnlPct =
+    totalCollateral > 0 ? totalPnlDollars / totalCollateral : 0;
   const totalPnlAfterFees = totalPnlDollars - totalFees;
   const totalPnlAfterFeesPct =
     totalCollateral > 0 ? totalPnlAfterFees / totalCollateral : 0;
