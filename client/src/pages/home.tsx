@@ -284,7 +284,7 @@ function TradesTable({
             <TableHead className="text-right">Collateral</TableHead>
             <TableHead className="text-right">PnL</TableHead>
             <TableHead className="text-right">Returned</TableHead>
-            <TableHead className="text-right">Fees</TableHead>
+            <TableHead className="text-right text-muted-foreground/50">Fees (Coming Soon)</TableHead>
             <TableHead>Time Opened</TableHead>
             <TableHead>Time Closed</TableHead>
           </TableRow>
@@ -380,12 +380,8 @@ function TradesTable({
                     ? `$${trade.amountReceived.toFixed(2)}`
                     : "-"}
               </TableCell>
-              <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {hideValues
-                  ? "•••••"
-                  : trade.totalFees !== undefined
-                    ? `$${trade.totalFees.toFixed(4)}`
-                    : "-"}
+              <TableCell className="text-right text-xs text-muted-foreground/50">
+                -
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
                 {trade.openTimestamp
@@ -601,7 +597,7 @@ const NETWORK_CONFIG = {
 export default function Home() {
   const [searchAddress, setSearchAddress] = useState<string | null>(null);
   const [network, setNetwork] = useState<Network>("mainnet");
-  const [showAfterFees, setShowAfterFees] = useState(false);
+  
   const [activeTab, setActiveTab] = useState<
     "trades" | "positions" | "vaults" | "stats"
   >("trades");
@@ -1047,27 +1043,17 @@ export default function Home() {
   );
   const wins = closeTrades.filter((t) => (t.profitPct ?? 0) > 0).length;
   const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
-  const totalPnlBeforeFees = closeTrades.reduce(
+  const totalPnl = closeTrades.reduce(
     (sum, t) => sum + (t.pnlAmount ?? 0),
     0,
   );
-  const totalFees = closeTrades.reduce((sum, t) => sum + (t.totalFees ?? 0), 0);
   const totalCollateral = closeTrades.reduce(
     (sum, t) => sum + (t.collateral ?? 0),
     0,
   );
-  const totalPnlAfterFees = totalPnlBeforeFees - totalFees;
-  const totalPnlBeforeFeesPct =
-    totalCollateral > 0 ? totalPnlBeforeFees / totalCollateral : 0;
-  const totalPnlAfterFeesPct =
-    totalCollateral > 0 ? totalPnlAfterFees / totalCollateral : 0;
-  const displayPnl = showAfterFees ? totalPnlAfterFees : totalPnlBeforeFees;
-  const displayPnlPct = showAfterFees ? totalPnlAfterFeesPct : totalPnlBeforeFeesPct;
+  const displayPnl = totalPnl;
+  const displayPnlPct = totalCollateral > 0 ? totalPnl / totalCollateral : 0;
   const pnlTrend = displayPnl > 0 ? "up" : displayPnl < 0 ? "down" : "neutral";
-
-  const toggleAfterFees = () => {
-    setShowAfterFees((prev) => !prev);
-  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -1262,8 +1248,7 @@ export default function Home() {
                 icon={displayPnl >= 0 ? TrendingUp : TrendingDown}
                 trend={pnlTrend}
                 loading={isLoading}
-                onToggle={toggleAfterFees}
-                toggleLabel={showAfterFees ? "After Fees" : "Before Fees"}
+                
               />
               <StatsCard
                 title="Win Rate"
@@ -1719,11 +1704,6 @@ export default function Home() {
                               (t) => t.direction === "short",
                             ).length;
 
-                            const totalFeesPaid = closedTrades.reduce(
-                              (sum, t) => sum + (t.totalFees ?? 0),
-                              0,
-                            );
-
                             return (
                               <>
                                 <div className="p-4 rounded-lg bg-muted/50">
@@ -1789,14 +1769,6 @@ export default function Home() {
                                   </p>
                                   <p className="text-xl font-bold">
                                     {longTrades} / {shortTrades}
-                                  </p>
-                                </div>
-                                <div className="p-4 rounded-lg bg-muted/50">
-                                  <p className="text-sm text-muted-foreground mb-1">
-                                    Total Fees Paid
-                                  </p>
-                                  <p className="text-xl font-bold font-mono text-orange-500">
-                                    ${totalFeesPaid.toFixed(2)}
                                   </p>
                                 </div>
                                 <div className="p-4 rounded-lg bg-muted/50">
@@ -1945,11 +1917,6 @@ export default function Home() {
                                 (t) => t.direction === "short",
                               ).length;
 
-                              const totalFeesPaid = closedTrades.reduce(
-                                (sum, t) => sum + (t.totalFees ?? 0),
-                                0,
-                              );
-
                               return (
                                 <>
                                   {!hideStatsAmount && (
@@ -2027,16 +1994,6 @@ export default function Home() {
                                       {longTrades} / {shortTrades}
                                     </p>
                                   </div>
-                                  {!hideStatsAmount && (
-                                    <div className="p-3 rounded-lg bg-slate-800/80">
-                                      <p className="text-xs text-slate-400 mb-1">
-                                        Fees Paid
-                                      </p>
-                                      <p className="text-lg font-bold font-mono text-orange-400">
-                                        ${totalFeesPaid.toFixed(2)}
-                                      </p>
-                                    </div>
-                                  )}
                                   <div className="p-3 rounded-lg bg-slate-800/80">
                                     <p className="text-xs text-slate-400 mb-1">
                                       Profit Factor
