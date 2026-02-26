@@ -89,7 +89,9 @@ Market symbols are determined by querying `perpBorrowing.marketId` directly from
   - `wasm-sai/perp/process_opening_fees` → `total_fee_charged`, `trigger_fee_component`
   - `wasm-sai/perp/process_closing_fees` → `final_closing_fee`, `final_trigger_fee`
 - Borrowing fee is from GraphQL state (available for open trades only)
-- Fees are fetched in parallel (batches of 10) for performance
+- Fees are fetched in parallel (batches of 10) with 10-second timeout per request
+- **Note:** Mainnet RPC prunes old transaction receipts (returns null), so fees show as "-" for older trades. Testnet retains receipts longer.
+- UI shows a single consolidated "Fees" column (individual fee breakdown hidden)
 
 ## Running the App
 
@@ -101,6 +103,7 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-02-26: Consolidated 4 fee columns into single "Fees" column; fixed PnL percentage to use weighted calculation; added 10s RPC timeout
 - 2026-02-26: Fixed volume calculation: batch size 100 (API hard limit), include order_triggered events, no trade ID dedup (matches sai-explorer)
 - 2026-02-26: Added stNIBI collateral USD conversion using oracle prices across all monetary values (trades, PnL, fees, volume, OI)
 - 2026-02-04: Simplified market matching by querying perpBorrowing directly from trades (API fix deployed)

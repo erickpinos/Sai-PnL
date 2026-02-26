@@ -284,11 +284,7 @@ function TradesTable({
             <TableHead className="text-right">Collateral</TableHead>
             <TableHead className="text-right">PnL</TableHead>
             <TableHead className="text-right">Returned</TableHead>
-            <TableHead className="text-right">Opening Fee</TableHead>
-            <TableHead className="text-right">Closing Fee</TableHead>
-            <TableHead className="text-right">Borrowing Fee</TableHead>
-            <TableHead className="text-right">Trigger Fee</TableHead>
-            <TableHead className="text-right">Net After Fees</TableHead>
+            <TableHead className="text-right">Fees</TableHead>
             <TableHead>Time Opened</TableHead>
             <TableHead>Time Closed</TableHead>
           </TableRow>
@@ -387,37 +383,8 @@ function TradesTable({
               <TableCell className="text-right font-mono text-sm text-muted-foreground">
                 {hideValues
                   ? "•••••"
-                  : trade.openingFee !== undefined
-                    ? `$${trade.openingFee.toFixed(4)}`
-                    : "-"}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {hideValues
-                  ? "•••••"
-                  : trade.closingFee !== undefined
-                    ? `$${trade.closingFee.toFixed(4)}`
-                    : "-"}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {hideValues
-                  ? "•••••"
-                  : trade.borrowingFee !== undefined
-                    ? `$${trade.borrowingFee.toFixed(4)}`
-                    : "-"}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm text-muted-foreground">
-                {hideValues
-                  ? "•••••"
-                  : trade.triggerFee !== undefined && trade.triggerFee > 0
-                    ? `$${trade.triggerFee.toFixed(4)}`
-                    : "-"}
-              </TableCell>
-              <TableCell className="text-right font-mono text-sm">
-                {hideValues
-                  ? "•••••"
-                  : trade.amountReceived !== undefined &&
-                      trade.totalFees !== undefined
-                    ? `$${(trade.amountReceived - trade.totalFees).toFixed(2)}`
+                  : trade.totalFees !== undefined
+                    ? `$${trade.totalFees.toFixed(4)}`
                     : "-"}
               </TableCell>
               <TableCell className="text-sm text-muted-foreground">
