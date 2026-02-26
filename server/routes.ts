@@ -368,8 +368,7 @@ async function fetchGlobalVolume(network: "mainnet" | "testnet"): Promise<void> 
   let totalVolume = 0;
   let tradeCount = 0;
   let offset = 0;
-  const batchSize = 1000;
-  const seenTradeIds = new Set<number>();
+  const batchSize = 100;
   
   console.log(`[Volume] Starting global volume fetch for ${network}...`);
   
@@ -410,16 +409,16 @@ async function fetchGlobalVolume(network: "mainnet" | "testnet"): Promise<void> 
       if (historyItems.length === 0) break;
       
       for (const item of historyItems) {
-        const isOpeningEvent = item.tradeChangeType === "position_opened";
-        if (item.trade && isOpeningEvent && !seenTradeIds.has(item.trade.id)) {
-          seenTradeIds.add(item.trade.id);
-          // Volume = collateral * leverage * collateralPrice (convert to USD)
-          const collateral = item.trade.openCollateralAmount || item.trade.collateralAmount;
+        // Count position_opened and order_triggered events (matches sai-explorer methodology)
+        const isVolumeEvent = item.tradeChangeType === "position_opened" || item.tradeChangeType === "order_triggered";
+        if (item.trade && isVolumeEvent) {
+          // Volume = |collateral * leverage / 1e6 * collateralPrice| (convert to USD)
+          const collateral = item.trade.collateralAmount;
           const collateralTokenSymbol = item.trade.perpBorrowing?.collateralToken?.symbol;
           const priceMultiplier = getCollateralPriceMultiplier(
             collateralTokenSymbol, oraclePriceMap, item.collateralPrice
           );
-          const positionSize = (collateral / 1e6) * item.trade.leverage * priceMultiplier;
+          const positionSize = Math.abs((collateral * item.trade.leverage) / 1e6) * priceMultiplier;
           totalVolume += positionSize;
           tradeCount++;
         }

@@ -101,6 +101,8 @@ The app runs on port 5000.
 
 ## Recent Changes
 
+- 2026-02-26: Fixed volume calculation: batch size 100 (API hard limit), include order_triggered events, no trade ID dedup (matches sai-explorer)
+- 2026-02-26: Added stNIBI collateral USD conversion using oracle prices across all monetary values (trades, PnL, fees, volume, OI)
 - 2026-02-04: Simplified market matching by querying perpBorrowing directly from trades (API fix deployed)
 - 2026-02-03: Improved market matching using tradeHistory partial data to extract marketId (most closed trades now show correct pair)
 - 2026-02-03: Fixed perpBorrowing API issue by fetching markets separately and matching trades by price
