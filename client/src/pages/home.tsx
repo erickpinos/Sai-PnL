@@ -1080,7 +1080,7 @@ export default function Home() {
   );
   const wins = closeTrades.filter((t) => (t.profitPct ?? 0) > 0).length;
   const winRate = closeTrades.length > 0 ? wins / closeTrades.length : 0;
-  const totalPnlDollars = closeTrades.reduce(
+  const totalPnlBeforeFees = closeTrades.reduce(
     (sum, t) => sum + (t.pnlAmount ?? 0),
     0,
   );
@@ -1089,13 +1089,13 @@ export default function Home() {
     (sum, t) => sum + (t.collateral ?? 0),
     0,
   );
-  const totalPnlPct =
-    totalCollateral > 0 ? totalPnlDollars / totalCollateral : 0;
-  const totalPnlAfterFees = totalPnlDollars - totalFees;
+  const totalPnlAfterFees = totalPnlBeforeFees - totalFees;
+  const totalPnlBeforeFeesPct =
+    totalCollateral > 0 ? totalPnlBeforeFees / totalCollateral : 0;
   const totalPnlAfterFeesPct =
     totalCollateral > 0 ? totalPnlAfterFees / totalCollateral : 0;
-  const displayPnl = showAfterFees ? totalPnlAfterFees : totalPnlDollars;
-  const displayPnlPct = showAfterFees ? totalPnlAfterFeesPct : totalPnlPct;
+  const displayPnl = showAfterFees ? totalPnlAfterFees : totalPnlBeforeFees;
+  const displayPnlPct = showAfterFees ? totalPnlAfterFeesPct : totalPnlBeforeFeesPct;
   const pnlTrend = displayPnl > 0 ? "up" : displayPnl < 0 ? "down" : "neutral";
 
   const toggleAfterFees = () => {

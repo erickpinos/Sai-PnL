@@ -599,6 +599,8 @@ async function fetchFeesFromRpc(
     const receipts = await Promise.all(
       batch.map(async (tx) => {
         try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), 10000);
           const response = await fetch(rpcUrl, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
@@ -607,8 +609,10 @@ async function fetchFeesFromRpc(
               method: 'eth_getTransactionReceipt',
               params: [tx.evmTxHash],
               id: 1
-            })
+            }),
+            signal: controller.signal
           });
+          clearTimeout(timeoutId);
           const result = await response.json() as { result?: TransactionReceipt };
           if (result.result) {
             const fees = extractFeesFromReceipt(result.result);
