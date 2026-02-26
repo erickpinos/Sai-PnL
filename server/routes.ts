@@ -28,7 +28,7 @@ function evmToBech32(evmAddress: string): string {
   return bech32.encode("nibi", words);
 }
 
-// GraphQL query for trades - now includes perpBorrowing since the API fix
+// GraphQL query for trades - includes perpBorrowing with collateralToken for USD conversion
 const TRADES_QUERY = `
   query GetTrades($trader: String!, $limit: Int, $offset: Int) {
     perp {
@@ -53,6 +53,9 @@ const TRADES_QUERY = `
         tp
         perpBorrowing {
           marketId
+          collateralToken {
+            symbol
+          }
         }
         openBlock {
           block
@@ -95,6 +98,14 @@ const MARKETS_QUERY = `
         price
       }
     }
+    oracle {
+      tokenPricesUsd {
+        token {
+          symbol
+        }
+        priceUsd
+      }
+    }
   }
 `;
 
@@ -110,6 +121,9 @@ interface MarketsQueryResult {
   perp: {
     borrowings: Market[];
   };
+  oracle?: {
+    tokenPricesUsd: Array<{ token: { symbol: string }; priceUsd: number }>;
+  };
 }
 
 // Build a mapping from marketId to symbol using the borrowings data
@@ -124,6 +138,49 @@ function buildMarketIdToSymbolMap(markets: Market[]): Map<number, string> {
   return symbolMap;
 }
 
+// Build a mapping from marketId to collateral token symbol
+function buildMarketIdToCollateralMap(markets: Market[]): Map<number, string> {
+  const collateralMap = new Map<number, string>();
+  for (const market of markets) {
+    const marketId = parseInt(market.marketId);
+    if (!isNaN(marketId) && market.collateralToken?.symbol) {
+      collateralMap.set(marketId, market.collateralToken.symbol);
+    }
+  }
+  return collateralMap;
+}
+
+// Build oracle price map from token prices
+function buildOraclePriceMap(tokenPrices: Array<{ token: { symbol: string }; priceUsd: number }> | undefined): Map<string, number> {
+  const priceMap = new Map<string, number>();
+  if (tokenPrices) {
+    for (const tp of tokenPrices) {
+      if (tp.token?.symbol && tp.priceUsd) {
+        priceMap.set(tp.token.symbol, tp.priceUsd);
+      }
+    }
+  }
+  return priceMap;
+}
+
+// Get the USD multiplier for a trade's collateral token
+// For USDC collateral, returns 1. For stNIBI, returns the stNIBI/USD price.
+function getCollateralPriceMultiplier(
+  collateralTokenSymbol: string | undefined,
+  oraclePriceMap: Map<string, number>,
+  fallbackCollateralPrice?: number | null
+): number {
+  if (!collateralTokenSymbol || collateralTokenSymbol === "USDC") {
+    return 1;
+  }
+  // Use oracle price for non-USDC collateral (e.g., stNIBI)
+  const oraclePrice = oraclePriceMap.get(collateralTokenSymbol);
+  if (oraclePrice) return oraclePrice;
+  // Fallback to collateralPrice from tradeHistory if available
+  if (fallbackCollateralPrice && fallbackCollateralPrice > 0) return fallbackCollateralPrice;
+  return 1;
+}
+
 // GraphQL query for global protocol stats - using borrowings for open interest
 const GLOBAL_STATS_QUERY = `
   query GetGlobalStats {
@@ -131,6 +188,9 @@ const GLOBAL_STATS_QUERY = `
       borrowings {
         marketId
         baseToken {
+          symbol
+        }
+        collateralToken {
           symbol
         }
         oiLong
@@ -200,7 +260,6 @@ const VAULT_POSITIONS_QUERY = `
 `;
 
 // GraphQL query for trade history (for realized P&L on closed trades)
-// NOTE: perpBorrowing is intentionally excluded - we match by price instead
 const TRADE_HISTORY_QUERY = `
   query GetTradeHistory($trader: String!, $limit: Int, $offset: Int) {
     perp {
@@ -214,6 +273,7 @@ const TRADE_HISTORY_QUERY = `
         id
         tradeChangeType
         evmTxHash
+        collateralPrice
         block {
           block
           block_ts
@@ -255,7 +315,6 @@ const FEE_TRANSACTIONS_QUERY = `
 `;
 
 // GraphQL query for all trade history (global volume calculation)
-// Using tradeHistory which doesn't require a trader filter
 const ALL_TRADE_HISTORY_QUERY = `
   query GetAllTradeHistory($limit: Int, $offset: Int) {
     perp {
@@ -267,11 +326,17 @@ const ALL_TRADE_HISTORY_QUERY = `
       ) {
         id
         tradeChangeType
+        collateralPrice
         trade {
           id
           collateralAmount
           openCollateralAmount
           leverage
+          perpBorrowing {
+            collateralToken {
+              symbol
+            }
+          }
         }
       }
     }
@@ -309,6 +374,10 @@ async function fetchGlobalVolume(network: "mainnet" | "testnet"): Promise<void> 
   console.log(`[Volume] Starting global volume fetch for ${network}...`);
   
   try {
+    // Fetch oracle prices for collateral token USD conversion
+    const marketsResult = await graphqlQuery<MarketsQueryResult>(config.graphql, MARKETS_QUERY, {});
+    const oraclePriceMap = buildOraclePriceMap(marketsResult.oracle?.tokenPricesUsd);
+    
     while (true) {
       const response = await fetch(config.graphql, {
         method: "POST",
@@ -322,12 +391,18 @@ async function fetchGlobalVolume(network: "mainnet" | "testnet"): Promise<void> 
       const result: GraphQLResponse<{ perp: { tradeHistory: Array<{ 
         id: number; 
         tradeChangeType: string;
-        trade: { id: number; collateralAmount: number; openCollateralAmount: number; leverage: number } | null 
+        collateralPrice: number | null;
+        trade: { 
+          id: number; 
+          collateralAmount: number; 
+          openCollateralAmount: number; 
+          leverage: number;
+          perpBorrowing?: { collateralToken?: { symbol: string } } | null;
+        } | null 
       }> } }> = await response.json();
       
       if (result.errors || !result.data?.perp?.tradeHistory) {
         console.error(`[Volume] Error fetching trade history for ${network}:`, result.errors);
-        // Keep previous cache value on error instead of zeroing out
         return;
       }
       
@@ -335,13 +410,16 @@ async function fetchGlobalVolume(network: "mainnet" | "testnet"): Promise<void> 
       if (historyItems.length === 0) break;
       
       for (const item of historyItems) {
-        // Count unique trades for position opening events (position_opened includes market/limit/trigger orders)
         const isOpeningEvent = item.tradeChangeType === "position_opened";
         if (item.trade && isOpeningEvent && !seenTradeIds.has(item.trade.id)) {
           seenTradeIds.add(item.trade.id);
-          // Volume = collateral * leverage (position size at opening)
+          // Volume = collateral * leverage * collateralPrice (convert to USD)
           const collateral = item.trade.openCollateralAmount || item.trade.collateralAmount;
-          const positionSize = (collateral / 1e6) * item.trade.leverage;
+          const collateralTokenSymbol = item.trade.perpBorrowing?.collateralToken?.symbol;
+          const priceMultiplier = getCollateralPriceMultiplier(
+            collateralTokenSymbol, oraclePriceMap, item.collateralPrice
+          );
+          const positionSize = (collateral / 1e6) * item.trade.leverage * priceMultiplier;
           totalVolume += positionSize;
           tradeCount++;
         }
@@ -404,6 +482,9 @@ interface PerpTrade {
   tp: number | null;
   perpBorrowing: {
     marketId: number;
+    collateralToken?: {
+      symbol: string;
+    };
   } | null;
   openBlock: {
     block: number;
@@ -431,6 +512,7 @@ interface TradeHistoryItem {
   id: number;
   tradeChangeType: string;
   evmTxHash: string | null;
+  collateralPrice: number | null;
   block: {
     block: number;
     block_ts: string;
@@ -614,9 +696,10 @@ async function graphqlQuery<T>(endpoint: string, query: string, variables: Recor
 // Convert GraphQL trade data to our Trade type
 function convertTrade(
   perpTrade: PerpTrade, 
-  pnlMap: Map<number, { pnlPct: number; pnlAmount: number }>, 
+  pnlMap: Map<number, { pnlPct: number; pnlAmount: number; collateralPrice: number }>, 
   feeMap: Map<number, TradeFees>, 
-  symbolMap: Map<number, string>
+  symbolMap: Map<number, string>,
+  oraclePriceMap: Map<string, number>
 ): Trade {
   const isOpen = perpTrade.isOpen;
   const timestamp = isOpen 
@@ -627,6 +710,13 @@ function convertTrade(
   const marketId = perpTrade.perpBorrowing?.marketId;
   const pair = marketId !== undefined ? (symbolMap.get(marketId) || "Unknown") : "Unknown";
   
+  // Determine collateral token and USD price multiplier
+  const collateralTokenSymbol = perpTrade.perpBorrowing?.collateralToken?.symbol;
+  const pnlData = pnlMap.get(perpTrade.id);
+  const collateralPriceMultiplier = getCollateralPriceMultiplier(
+    collateralTokenSymbol, oraclePriceMap, pnlData?.collateralPrice
+  );
+  
   const trade: Trade = {
     txHash: `trade-${perpTrade.id}`,
     timestamp,
@@ -634,26 +724,26 @@ function convertTrade(
     pair,
     direction: perpTrade.isLong ? "long" : "short",
     leverage: perpTrade.leverage,
-    collateral: perpTrade.openCollateralAmount / 1e6,
+    collateral: (perpTrade.openCollateralAmount / 1e6) * collateralPriceMultiplier,
     openPrice: perpTrade.openPrice,
     tradeIndex: String(perpTrade.id),
     openTimestamp: perpTrade.openBlock?.block_ts,
     closeTimestamp: perpTrade.closeBlock?.block_ts,
+    collateralToken: collateralTokenSymbol,
   };
   
-  // Get fees from feeMap (RPC-based)
+  // Get fees from feeMap (RPC-based) - convert to USD
   const fees = feeMap.get(perpTrade.id);
   if (fees) {
-    trade.openingFee = fees.openingFee;
-    trade.closingFee = fees.closingFee;
-    trade.triggerFee = fees.triggerFee;
-    trade.totalFees = fees.openingFee + fees.closingFee + fees.triggerFee;
+    trade.openingFee = fees.openingFee * collateralPriceMultiplier;
+    trade.closingFee = fees.closingFee * collateralPriceMultiplier;
+    trade.triggerFee = fees.triggerFee * collateralPriceMultiplier;
+    trade.totalFees = (fees.openingFee + fees.closingFee + fees.triggerFee) * collateralPriceMultiplier;
   }
   
-  // Get borrowing fee from GraphQL state (available for open trades, shows accumulated borrowing)
+  // Get borrowing fee from GraphQL state - convert to USD
   if (perpTrade.state) {
-    trade.borrowingFee = perpTrade.state.borrowingFeeCollateral / 1e6;
-    // Update total fees to include borrowing
+    trade.borrowingFee = (perpTrade.state.borrowingFeeCollateral / 1e6) * collateralPriceMultiplier;
     if (trade.totalFees !== undefined) {
       trade.totalFees += trade.borrowingFee;
     } else {
@@ -663,19 +753,15 @@ function convertTrade(
   
   if (!isOpen) {
     trade.closePrice = perpTrade.closePrice || undefined;
-    // First try to get P&L from state (for open trades with unrealized P&L)
     if (perpTrade.state) {
       trade.profitPct = perpTrade.state.pnlPct;
-      trade.pnlAmount = perpTrade.state.pnlCollateralAfterFees / 1e6;
+      trade.pnlAmount = (perpTrade.state.pnlCollateralAfterFees / 1e6) * collateralPriceMultiplier;
     } else {
-      // For closed trades, get realized P&L from trade history map
-      const pnlData = pnlMap.get(perpTrade.id);
       if (pnlData) {
         trade.profitPct = pnlData.pnlPct;
-        trade.pnlAmount = pnlData.pnlAmount;
+        trade.pnlAmount = pnlData.pnlAmount * collateralPriceMultiplier;
       }
     }
-    // Calculate amount received at closing (collateral + P&L)
     if (trade.collateral !== undefined && trade.pnlAmount !== undefined) {
       trade.amountReceived = trade.collateral + trade.pnlAmount;
     }
@@ -685,22 +771,31 @@ function convertTrade(
 }
 
 // Convert trade history item to our Trade type (for closed trades with realized P&L)
-// Note: Trade history items don't include perpBorrowing, so we pass the trades list to look up market info
 function convertTradeHistoryItem(
   item: TradeHistoryItem, 
   tradesMap: Map<number, PerpTrade>,
-  symbolMap: Map<number, string>
+  symbolMap: Map<number, string>,
+  oraclePriceMap: Map<string, number>
 ): Trade | null {
-  // Only process close events
   const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
   if (!closeTypes.includes(item.tradeChangeType)) {
     return null;
   }
   
-  // Look up market symbol from the corresponding trade's perpBorrowing
   const perpTrade = tradesMap.get(item.trade.id);
   const marketId = perpTrade?.perpBorrowing?.marketId;
   const pair = marketId !== undefined ? (symbolMap.get(marketId) || "Unknown") : "Unknown";
+  
+  // Determine collateral token and USD multiplier
+  const collateralTokenSymbol = perpTrade?.perpBorrowing?.collateralToken?.symbol;
+  const collateralPriceMultiplier = getCollateralPriceMultiplier(
+    collateralTokenSymbol, oraclePriceMap, item.collateralPrice
+  );
+  
+  // Get collateral from the perpTrade if available
+  const rawCollateral = perpTrade 
+    ? (perpTrade.openCollateralAmount || perpTrade.collateralAmount) / 1e6 
+    : undefined;
   
   const result: Trade = {
     txHash: `history-${item.id}`,
@@ -709,18 +804,19 @@ function convertTradeHistoryItem(
     pair,
     direction: item.trade.isLong ? "long" : "short",
     leverage: item.trade.leverage,
+    collateral: rawCollateral !== undefined ? rawCollateral * collateralPriceMultiplier : undefined,
     openPrice: item.trade.openPrice,
     closePrice: item.trade.closePrice || undefined,
     tradeIndex: String(item.trade.id),
+    collateralToken: collateralTokenSymbol,
   };
   
   if (item.realizedPnlPct !== null) {
     result.profitPct = item.realizedPnlPct;
   }
   if (item.realizedPnlCollateral !== null) {
-    result.pnlAmount = item.realizedPnlCollateral / 1e6;
+    result.pnlAmount = (item.realizedPnlCollateral / 1e6) * collateralPriceMultiplier;
   }
-  // Calculate amount received at closing (collateral + P&L)
   if (result.collateral !== undefined && result.pnlAmount !== undefined) {
     result.amountReceived = result.collateral + result.pnlAmount;
   }
@@ -802,6 +898,9 @@ export async function registerRoutes(
       // Build marketId → symbol mapping from borrowings data
       const symbolMap = buildMarketIdToSymbolMap(markets);
       
+      // Build oracle price map for collateral token USD conversion
+      const oraclePriceMap = buildOraclePriceMap(marketsResult.oracle?.tokenPricesUsd);
+      
       // Collect transaction hashes for RPC fee extraction
       const txHashesForFees: { tradeId: number; evmTxHash: string; isOpening: boolean }[] = [];
       const openingTypes = ["position_opened"];
@@ -830,14 +929,15 @@ export async function registerRoutes(
       const feeMap = await fetchFeesFromRpc(networkConfig.rpc, txHashesForFees);
       console.log(`Got fees for ${feeMap.size} trades`);
       
-      // Build a map of trade ID to realized P&L from trade history
-      const pnlMap = new Map<number, { pnlPct: number; pnlAmount: number }>();
+      // Build a map of trade ID to realized P&L from trade history (includes collateralPrice for USD conversion)
+      const pnlMap = new Map<number, { pnlPct: number; pnlAmount: number; collateralPrice: number }>();
       const closeTypes = ["position_closed_user", "position_closed_sl", "position_closed_tp", "position_liquidated"];
       for (const historyItem of historyResult.perp.tradeHistory) {
         if (closeTypes.includes(historyItem.tradeChangeType) && historyItem.realizedPnlPct !== null) {
           pnlMap.set(historyItem.trade.id, {
             pnlPct: historyItem.realizedPnlPct,
             pnlAmount: (historyItem.realizedPnlCollateral || 0) / 1e6,
+            collateralPrice: historyItem.collateralPrice || 1,
           });
         }
       }
@@ -854,7 +954,7 @@ export async function registerRoutes(
       
       // First, add trades from the trades query (includes open positions)
       for (const perpTrade of tradesResult.perp.trades) {
-        const trade = convertTrade(perpTrade, pnlMap, feeMap, symbolMap);
+        const trade = convertTrade(perpTrade, pnlMap, feeMap, symbolMap, oraclePriceMap);
         trades.push(trade);
         seenTradeIds.add(perpTrade.id);
       }
@@ -862,7 +962,7 @@ export async function registerRoutes(
       // Add closed trades from history that might not be in the trades list
       for (const historyItem of historyResult.perp.tradeHistory) {
         if (!seenTradeIds.has(historyItem.trade.id)) {
-          const trade = convertTradeHistoryItem(historyItem, perpTradesMap, symbolMap);
+          const trade = convertTradeHistoryItem(historyItem, perpTradesMap, symbolMap, oraclePriceMap);
           if (trade) {
             trades.push(trade);
             seenTradeIds.add(historyItem.trade.id);
@@ -948,27 +1048,36 @@ export async function registerRoutes(
       
       // Build marketId → symbol mapping from borrowings data
       const symbolMap = buildMarketIdToSymbolMap(markets);
+      
+      // Build oracle price map for collateral token USD conversion
+      const oraclePriceMap = buildOraclePriceMap(marketsData.data?.oracle?.tokenPricesUsd);
 
       // Convert to OpenPosition format - use perpBorrowing directly from trades
       const positions: OpenPosition[] = openTrades.map(trade => {
         const marketId = trade.perpBorrowing?.marketId;
         const pair = marketId !== undefined ? (symbolMap.get(marketId) || "Unknown") : "Unknown";
+        
+        // Get collateral token and USD multiplier
+        const collateralTokenSymbol = trade.perpBorrowing?.collateralToken?.symbol;
+        const collateralPriceMultiplier = getCollateralPriceMultiplier(collateralTokenSymbol, oraclePriceMap);
+        
         return {
           tradeId: trade.id,
           pair,
           direction: trade.isLong ? "long" : "short",
           leverage: trade.leverage,
-          collateral: (trade.openCollateralAmount || trade.collateralAmount) / 1e6,
+          collateral: ((trade.openCollateralAmount || trade.collateralAmount) / 1e6) * collateralPriceMultiplier,
           entryPrice: trade.openPrice,
           currentPrice: undefined,
           stopLoss: trade.sl,
           takeProfit: trade.tp,
           liquidationPrice: trade.state?.liquidationPrice,
-          unrealizedPnl: trade.state ? trade.state.pnlCollateral / 1e6 : undefined,
+          unrealizedPnl: trade.state ? (trade.state.pnlCollateral / 1e6) * collateralPriceMultiplier : undefined,
           unrealizedPnlPct: trade.state?.pnlPct,
-          positionValue: trade.state ? trade.state.positionValue / 1e6 : undefined,
-          borrowingFee: trade.state ? trade.state.borrowingFeeCollateral / 1e6 : undefined,
+          positionValue: trade.state ? (trade.state.positionValue / 1e6) * collateralPriceMultiplier : undefined,
+          borrowingFee: trade.state ? (trade.state.borrowingFeeCollateral / 1e6) * collateralPriceMultiplier : undefined,
           openedAt: trade.openBlock?.block_ts || new Date().toISOString(),
+          collateralToken: collateralTokenSymbol,
         };
       });
 
@@ -1032,15 +1141,17 @@ export async function registerRoutes(
         }
       });
 
-      // Calculate open interest from borrowings data
+      // Calculate open interest from borrowings data (convert to USD for non-USDC collateral)
       let longOpenInterest = 0;
       let shortOpenInterest = 0;
       
       borrowings.forEach((borrowing: any) => {
         const oiLong = borrowing.oiLong || 0;
         const oiShort = borrowing.oiShort || 0;
-        longOpenInterest += oiLong / 1e6;
-        shortOpenInterest += oiShort / 1e6;
+        const collateralSymbol = borrowing.collateralToken?.symbol || "USDC";
+        const collateralPrice = (collateralSymbol !== "USDC") ? (priceMap[collateralSymbol] || 1) : 1;
+        longOpenInterest += (oiLong / 1e6) * collateralPrice;
+        shortOpenInterest += (oiShort / 1e6) * collateralPrice;
       });
 
       // Calculate TVL from vaults using availableAssets and oracle prices

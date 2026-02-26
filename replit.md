@@ -58,19 +58,28 @@ This application allows users to connect their wallet (MetaMask/Rabby) or enter 
 - Uses bech32 library with "nibi" prefix
 
 ### GraphQL Queries
-- `trades` query: Returns trade list with open/close status, prices, leverage
-- `tradeHistory` query: Returns `realizedPnlPct`, `realizedPnlCollateral`, and `evmTxHash` for closed trades
-- `borrowings` query: Returns all markets with prices (used for matching trades to pairs)
+- `trades` query: Returns trade list with open/close status, prices, leverage, and `perpBorrowing { marketId, collateralToken { symbol } }`
+- `tradeHistory` query: Returns `realizedPnlPct`, `realizedPnlCollateral`, `collateralPrice`, and `evmTxHash` for closed trades
+- `borrowings` query: Returns all markets with prices and oracle token prices (used for matching trades to pairs and USD conversion)
+
+### Collateral Token USD Conversion
+Markets can use different collateral tokens (USDC or stNIBI). All monetary values are converted to USD:
+- `perpBorrowing.collateralToken.symbol` on each trade identifies the collateral token
+- For USDC collateral: multiplier = 1 (already in USD)
+- For stNIBI collateral: multiplier = oracle stNIBI/USD price
+- `collateralPrice` from `tradeHistory` provides historical USD price at trade time (fallback for closed trades)
+- Conversion applies to: collateral, PnL amounts, fees, position values, volume, and open interest
+- Oracle prices fetched via `oracle { tokenPricesUsd }` in the MARKETS_QUERY
 
 ### Market Matching
 Market symbols are determined by querying `perpBorrowing.marketId` directly from each trade, then mapping to symbols using the `borrowings` endpoint:
-1. Query `trades` with `perpBorrowing { marketId }` included
-2. Query all markets via `borrowings` endpoint to get `marketId → symbol` mapping
+1. Query `trades` with `perpBorrowing { marketId, collateralToken { symbol } }` included
+2. Query all markets via `borrowings` endpoint to get `marketId → symbol` mapping + oracle prices
 3. Trades with deprecated/unknown marketId show "Unknown" as the pair
 
 ### PnL Data Sources
-- For closed trades: `realizedPnlPct` from `tradeHistory` query
-- For open trades: `state.pnlPct` from `trades` query (unrealized PnL)
+- For closed trades: `realizedPnlPct` from `tradeHistory` query (amounts converted to USD via collateral price)
+- For open trades: `state.pnlPct` from `trades` query (unrealized PnL, amounts converted to USD via oracle price)
 
 ### Fee Extraction (RPC-based)
 - Fees are extracted from EVM transaction receipts via RPC

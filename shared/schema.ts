@@ -22,6 +22,7 @@ export const tradeSchema = z.object({
   triggerFee: z.number().optional(),
   totalFees: z.number().optional(),
   amountReceived: z.number().optional(),
+  collateralToken: z.string().optional(),
 });
 
 export type Trade = z.infer<typeof tradeSchema>;
@@ -43,6 +44,7 @@ export const openPositionSchema = z.object({
   positionValue: z.number().optional(),
   borrowingFee: z.number().optional(),
   openedAt: z.string(),
+  collateralToken: z.string().optional(),
 });
 
 export type OpenPosition = z.infer<typeof openPositionSchema>;
