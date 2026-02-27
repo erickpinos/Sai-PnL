@@ -2049,6 +2049,276 @@ export default function Home() {
                         sai-explorer.vercel.com
                       </a>
                     </div>
+                    {false && (
+                      <>
+                    {globalStatsLoading ? (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                        {[...Array(5)].map((_, i) => (
+                          <Skeleton key={i} className="h-20 w-full" />
+                        ))}
+                      </div>
+                    ) : globalStatsData?.stats ? (
+                      <>
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Total Value Locked
+                            </p>
+                            <p className="text-xl font-bold font-mono text-primary">
+                              $
+                              {globalStatsData.stats.totalTvl.toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 0 },
+                              )}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Total Open Interest
+                            </p>
+                            <p className="text-xl font-bold font-mono">
+                              $
+                              {globalStatsData.stats.totalOpenInterest.toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 0 },
+                              )}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Open Positions
+                            </p>
+                            <p className="text-xl font-bold">
+                              {globalStatsData.stats.totalOpenPositions.toLocaleString()}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Long Open Interest
+                            </p>
+                            <p className="text-xl font-bold font-mono text-green-500">
+                              $
+                              {globalStatsData.stats.longOpenInterest.toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 0 },
+                              )}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Short Open Interest
+                            </p>
+                            <p className="text-xl font-bold font-mono text-red-500">
+                              $
+                              {globalStatsData.stats.shortOpenInterest.toLocaleString(
+                                undefined,
+                                { maximumFractionDigits: 0 },
+                              )}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Long/Short Ratio
+                            </p>
+                            <p className="text-xl font-bold font-mono">
+                              {globalStatsData.stats.shortOpenInterest > 0
+                                ? (
+                                    globalStatsData.stats.longOpenInterest /
+                                    globalStatsData.stats.shortOpenInterest
+                                  ).toFixed(2)
+                                : globalStatsData.stats.longOpenInterest > 0
+                                  ? "∞"
+                                  : "-"}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Total Trading Volume
+                            </p>
+                            <p className="text-xl font-bold font-mono">
+                              {volumeData?.totalVolume
+                                ? `$${volumeData.totalVolume.toLocaleString(undefined, { maximumFractionDigits: 0 })}`
+                                : "Loading..."}
+                            </p>
+                          </div>
+                          <div className="p-4 rounded-lg bg-muted/50">
+                            <p className="text-sm text-muted-foreground mb-1">
+                              Total Trades
+                            </p>
+                            <p className="text-xl font-bold font-mono">
+                              {volumeData?.tradeCount
+                                ? volumeData.tradeCount.toLocaleString()
+                                : "Loading..."}
+                            </p>
+                          </div>
+                        </div>
+
+                        {globalStatsData.stats.vaults &&
+                          globalStatsData.stats.vaults.length > 0 &&
+                          (() => {
+                            const seenSymbols = new Set<string>();
+                            const activeVaults: any[] = [];
+                            const deprecatedVaults: any[] = [];
+
+                            globalStatsData.stats.vaults.forEach(
+                              (vault: any) => {
+                                if (seenSymbols.has(vault.symbol)) {
+                                  deprecatedVaults.push(vault);
+                                } else {
+                                  seenSymbols.add(vault.symbol);
+                                  activeVaults.push(vault);
+                                }
+                              },
+                            );
+
+                            return (
+                              <div className="mt-6">
+                                <h4 className="text-sm font-medium text-muted-foreground mb-3">
+                                  Vault Breakdown
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                                  {activeVaults.map(
+                                    (vault: any, index: number) => (
+                                      <div
+                                        key={vault.id || index}
+                                        className="p-4 rounded-lg border border-border/50 bg-card"
+                                        data-testid={`vault-card-${index}`}
+                                      >
+                                        <div className="flex items-center justify-between gap-2 mb-2">
+                                          <span className="font-medium">
+                                            {vault.symbol} Vault
+                                          </span>
+                                          {vault.apy !== undefined &&
+                                            vault.apy !== null &&
+                                            vault.apy > 0 && (
+                                              <span className="text-xs px-2 py-1 rounded-full bg-primary/10 text-primary">
+                                                {vault.apy.toFixed(2)}% APY
+                                              </span>
+                                            )}
+                                        </div>
+                                        <p className="text-lg font-bold font-mono">
+                                          $
+                                          {vault.tvl.toLocaleString(undefined, {
+                                            maximumFractionDigits: 2,
+                                          })}
+                                        </p>
+                                        {vault.balance && (
+                                          <p className="text-xs text-muted-foreground mt-1">
+                                            {vault.balance.toLocaleString(
+                                              undefined,
+                                              { maximumFractionDigits: 2 },
+                                            )}{" "}
+                                            {vault.symbol}
+                                          </p>
+                                        )}
+                                      </div>
+                                    ),
+                                  )}
+                                </div>
+
+                                {deprecatedVaults.length > 0 && (
+                                  <details className="mt-4">
+                                    <summary className="text-xs text-muted-foreground cursor-pointer hover:text-foreground transition-colors">
+                                      Deprecated/Hidden (
+                                      {deprecatedVaults.length})
+                                    </summary>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3 opacity-60">
+                                      {deprecatedVaults.map(
+                                        (vault: any, index: number) => (
+                                          <div
+                                            key={
+                                              vault.id || `deprecated-${index}`
+                                            }
+                                            className="p-4 rounded-lg border border-border/30 bg-card/50"
+                                            data-testid={`vault-card-deprecated-${index}`}
+                                          >
+                                            <div className="flex items-center justify-between gap-2 mb-2">
+                                              <span className="font-medium text-muted-foreground">
+                                                {vault.symbol} Vault
+                                              </span>
+                                              <span className="text-xs px-2 py-1 rounded-full bg-muted text-muted-foreground">
+                                                Deprecated
+                                              </span>
+                                            </div>
+                                            <p className="text-lg font-bold font-mono">
+                                              $
+                                              {vault.tvl.toLocaleString(
+                                                undefined,
+                                                { maximumFractionDigits: 2 },
+                                              )}
+                                            </p>
+                                            {vault.balance && (
+                                              <p className="text-xs text-muted-foreground mt-1">
+                                                {vault.balance.toLocaleString(
+                                                  undefined,
+                                                  { maximumFractionDigits: 2 },
+                                                )}{" "}
+                                                {vault.symbol}
+                                              </p>
+                                            )}
+                                          </div>
+                                        ),
+                                      )}
+                                    </div>
+                                  </details>
+                                )}
+                              </div>
+                            );
+                          })()}
+
+                        <div className="mt-6 pt-4 border-t border-border/50">
+                          <h4 className="text-sm font-medium text-muted-foreground mb-3">
+                            Methodology
+                          </h4>
+                          <div className="space-y-2 text-xs text-muted-foreground">
+                            <p>
+                              <span className="font-medium text-foreground/80">
+                                Total Value Locked:
+                              </span>{" "}
+                              Sum of all vault balances (availableAssets)
+                              multiplied by oracle token prices. USDC priced at
+                              ~$1.00, stNIBI priced via Sai Keeper oracle.
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">
+                                Total Open Interest:
+                              </span>{" "}
+                              Sum of Long OI + Short OI across all perpetual
+                              markets. This is the notional value (collateral ×
+                              leverage), sourced from the borrowings endpoint.
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">
+                                Open Positions:
+                              </span>{" "}
+                              Count of active perpetual markets with open
+                              positions from the borrowings query.
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">
+                                Long/Short Open Interest:
+                              </span>{" "}
+                              Notional value (collateral × leverage) for long
+                              and short positions respectively, aggregated from
+                              each market's oiLong and oiShort values.
+                            </p>
+                            <p>
+                              <span className="font-medium text-foreground/80">
+                                Long/Short Ratio:
+                              </span>{" "}
+                              Calculated as Long Open Interest divided by Short
+                              Open Interest.
+                            </p>
+                          </div>
+                        </div>
+                      </>
+                    ) : (
+                      <p className="text-muted-foreground text-center py-4">
+                        Unable to load protocol stats
+                      </p>
+                    )}
+                      </>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>
